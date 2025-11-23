@@ -1,4 +1,4 @@
-# C++ template-based crossplatform log library
+# C++ template-based cross-platform log library
 
 ```C++
 // Stripped template instantiations.
@@ -26,7 +26,7 @@ Log::done();
 
 This is a complete rework of my [old logger](https://github.com/balazs-bamer/cpp-logger/tree/old/) after identifying the design flaws and performance problems. The library requires C++17.
 
-The code was written to possibly conform MISRA C++ and High-Integrity C++.
+The code was written to possibly conform to MISRA C++ and High-Integrity C++.
 
 The library is published under the [MIT license](https://opensource.org/licenses/MIT).
 
@@ -35,18 +35,18 @@ Copyright 2020 Balázs Bámer.
 ## Aims
 
 - Provide a common logger API for cross-platform embedded / desktop code.
-- Use as minimal code and data space as possible. I'm not sure if I'm was good enough obtaining it. On STM32 Cortex M3, flash overhead of direct sending mode is **4k**, queued multithreading mode id **6k**. Anyway, no more time to further develop this library.
-- The library was designed to allow the programmer control log bandwidth usage, program and data memory consumption.
+- Use as minimal code and data space as possible. I'm not sure if I was good enough to obtain it. On STM32 Cortex M3, flash overhead of direct sending mode is **4k**, queued multithreading mode id **6k**. Anyway, no more time to further develop this library.
+- The library was designed to allow the programmer control of log bandwidth usage, program and data memory consumption.
 - Log arithmetic C++ types and strings with or without copying them (beneficial for literals).
   - String literals or string constants can be transferred using their pointers to save MCU cycles.
   - More transient strings will be copied instantly.
 - Operate in a _strictly typed_ way as opposed to the printf-based loggers some companies still use today.
-- We needed a much finer granularity than the usual log levels, so I've introduced independently selectable topics. Recently I've also added traditional log levels.
+- We needed a much finer granularity than the usual log levels, so I've introduced independently selectable topics. Recently, I've also added traditional log levels.
 - Provide blazing-fast atomic logging of one integral type into a buffer. Its contents can later be converted and sent.
-- Important aim was to let the user log a _group of related items_ without other tasks interleaving the output of converting these items.
-- Possibly minimal relying on external libraries. It does not depend on numeric to string conversion functions.
+- An important aim was to let the user log a _group of related items_ without other tasks interleaving the output of converting these items.
+- Possibly minimal reliance on external libraries. It does not depend on numeric-to-string conversion functions.
 - In contrast with the original solution, the new one extensively uses templated classes to
-  - implement a flexible plugin architecture for adapting different user needs
+  - implement a flexible plugin architecture for adapting to different user needs
   - let the compiler optimizer do its finest.
   - _totally eliminate_ logging code generation with at least -O1 optimization level with a one-line change (template logic, without #ifdef).
 - Let the user decide to rely on C++ exceptions or implement a different kind of error management.
@@ -67,27 +67,27 @@ The logger consists of six classes:
     - Obtaining the task name in C string.
   - Obtaining timestamps using some OS / STL time routine.
   - Error management.
-- _Message_ - used as a transfer medium in the Queue. For numeric types and strings transferred by pointers, one message is needed per item. For stored strings several messages may be necessary. There are two general-purpose implementations:
-  - a variant based message.
+- _Message_ - used as a transfer medium in the Queue. For numeric types and strings transferred by pointers, one message is needed per item. For stored strings, several messages may be necessary. There are two general-purpose implementations:
+  - a variant-based message.
   - a more space-efficient handcrafted message.
-- _AtomicBuffer_ - provides buffer and instrumentation for the atomic logging. This bypasses all the queues and logic used to log groups of various types.
+- _AtomicBuffer_ - provides a buffer and instrumentation for the atomic logging. This bypasses all the queues and logic used to log groups of various types.
 - _Config_ - provides some configuration parameters.
 
 The logger can operate in two modes:
-- Direct without queue, when the conversion and sending happens without message instantiation and queue usage. This can be useful for single-threaded applications.
-- With queue, when each item sent will form one or more (in case of stored strings) message and use a central thread-safe queue. On the other end of the queue a background thread pops the messages and groups them by tasks in secondary lists. When a group of related items from a task has arrived, its conversion and sending begins.
+- Direct without queue, when the conversion and sending happen without message instantiation and queue usage. This can be useful for single-threaded applications.
+- With a queue, when each item is sent, it will form one or more (in case of stored strings) messages and use a central thread-safe queue. On the other end of the queue, a background thread pops the messages and groups them by tasks in secondary lists. When a group of related items from a task has arrived, its conversion and sending begin.
 
 ## Implementations
 
-The current library provides some simple implementations for STL and Boost based desktop and server applications and FreeRTOS based embedded applications. The whole implementation assumes an architecture of at least 32 bits.
+The current library offers simple implementations for STL and Boost-based desktop and server applications, as well as FreeRTOS-based embedded applications. The whole implementation assumes an architecture of at least 32 bits.
 
 ### Log
 
 This is a general implementation, but tailored for embedded requirements.
 
-In queue-less mode, conversion and sending happens immediately for each item. Thus it is desirable that the Sender has some sort of buffering inside.
+In queue-less mode, conversion and sending happen immediately for each item. Thus ,it is desirable that the Sender has some sort of buffering inside.
 
-For the queue mode, it contains a secondary list or queue for each task, which gather the items in each logged group. After the terminal item arrives, conversion happens for each item in the sender buffer and then comes the sending. These secondary queues are backed by a pool allocator to avoid repeated dynamic memory access.
+For the queue mode, it contains a secondary list or queue for each task, which gathers the items in each logged group. After the terminal item arrives, conversion occurs for each item in the sender buffer, and then the sending process begins. These secondary queues are backed by a pool allocator to avoid repeated dynamic memory access.
 
 ### ConverterCustomText
 
@@ -102,24 +102,24 @@ A simple converter emitting character strings, with an emphasis on space-efficie
 
 ### AppInterfaceFreeRtosMinimal
 
-This implementation assumes FreeRTOS 10.0.1, but should work as well as with 9.x or perhaps even older. The main objective was to keep it as simple and small as possible. It provides global overload of new and delete operators using FreeRTOS' dynamic memory management, but itself uses only a statically allocated array. It uses a linear array for task registry and omits unregistering, because a typical embedded application creates all the tasks beforehand and never kills them. Task names are native FreeRTOS task names. For similar reasons, logger shutdown is not implemented.
-There is a design flaw in the library: checking for ISRs happen here, so the FreeRTOS implementation contains an MCU-specific function, here for STM32. However, it is easy to replace with the one for the actual MCU.
+This implementation assumes FreeRTOS 10.0.1, but should also work with versions 9.x or possibly even older. The main objective was to keep it as simple and small as possible. It provides a global overload of new and delete operators using FreeRTOS' dynamic memory management, but itself uses only a statically allocated array. It uses a linear array for the task registry and omits unregistering, as a typical embedded application typically creates all tasks beforehand and never kills them. Task names are native to FreeRTOS. For similar reasons, logger shutdown is not implemented.
+There is a design flaw in the library: checking for ISRs happens here, so the FreeRTOS implementation contains an MCU-specific function, here for STM32. However, it is easy to replace it with the one for the actual MCU.
 
 ### AppInterfaceStd
 
-This is a general desktop-oriented C++17 STL implementation targeting speed over space. It uses a hash set and thread local storage for task registration, and task unregistration is also supported. The task registy API is protected by a mutex. Other, more frequently called functions work without locking. Logger initialization and shutdown are properly implemented.
+This is a general, desktop-oriented C++17 STL implementation that prioritises speed over space. It uses a hash set and thread-local storage for task registration, and task unregistration is also supported. The task registry API is protected by a mutex. Other, more frequently called functions work without locking. Logger initialisation and shutdown are properly implemented.
 
 ### QueueVoid
 
-Empty implementation, used for placeholder when no queue is needed.
+An empty implementation is used as a placeholder when no queue is required.
 
 ### QueueFreeRtos
 
-It uses the FreeRTOS' built-in queue, so no locking is needed on sending. Sending into the queue can happen from an ISR.
+It utilises FreeRTOS's built-in queue, so no locking is required for sending. Sending an item into the queue can occur from an ISR.
 
 ### QueueStdBoost
 
-This one uses a multi-producer multi-consumer lockfree queue of Boost, so no locking is needed either.
+This one uses a multi-producer, multi-consumer lock-free queue of Boost, so no locking is needed either.
 
 ### QueueStdCircular
 
@@ -127,11 +127,11 @@ This one uses a simple circular buffer with `std::lock_guard`.
 
 ### SenderVoid
 
-Emply implementation for the case when all the log calls have to be eliminated from the binary. This happens at gcc and clang optimization levels -Os, -O1, -O2 and -O3. The application can use a template metaprogramming technique to declare a Log using this as the appropriate parameter, so no #ifdef is needed.
+Empty implementation for the case when all the log calls have to be eliminated from the binary. This occurs at GCC and Clang optimisation levels -Os, -O1, -O2, and -O3. The application can utilise a template metaprogramming technique to declare a Log, using this as the appropriate parameter, so no #ifdef is required.
 
 ### SenderStmHalMinimal
 
-This is a minimal implementation for STM32 UART using blocking HAL transmission. A more sophisticated one would use double buffering with DMA to use the MCU more efficiently and allow buffering new data during the potentially slow transmission of the old buffer. This mechanism is implemented in the old version.
+This is a minimal implementation for the STM32 UART using blocking HAL transmission. A more sophisticated approach would utilise double buffering with DMA to optimise the MCU's efficiency and allow for buffering new data during the potentially slow transmission of the old buffer. This mechanism is implemented in the old version.
 
 ### SenderStdOstream
 
@@ -139,19 +139,19 @@ It is a simple std::ostream wrapper.
 
 ### SenderRos2
 
-A simple ROS2 log wrapper. This wrapper has its own loglevels and every property defined here. However, due to the architecture of this library this wrapper uses only a compile-time hardwired ROS2 loglevel.
+A simple ROS2 log wrapper. This wrapper has its own log levels and every property defined here. However, due to the architecture of this library, this wrapper uses only a compile-time hardwired ROS2 log level.
 
 ### AtomicBufferOperational
 
-Normal cross-platform implementaiton.
+Normal cross-platform implementation.
 
 ### AtomicBufferVoid
 
-Used instead the normal one to strip its static variables when not in use.
+Used the normal one instead to strip its static variables when not in use.
 
 ### Config
 
-Converts the template arguments into public static variables. One can use it or write a template-less direct class instead using this example:
+Converts the template arguments into public static variables. One can use it or write a template-less direct class instead, using this example:
 
 ```C++
 template<bool tAllowRegistrationLog, LogTopic tMaxTopicCount, TaskRepresentation tTaskRepresentation, size_t tDirectBufferSize, int32_t tRefreshPeriod, ErrorLevel tErrorLevel = ErrorLevel::All>
@@ -168,7 +168,7 @@ public:
 
 ## Benchmarks
 
-I used [picobench](https://github.com/iboB/picobench) for benchmarks using the supplied bechmark apps. Here are some averaged results measured on 8192 iterations on my _Intel(R) Xeon(R) CPU E31220L @ 2.20GHz_. Compiled using `clang++ -O2`. There were no significant differences for `MessageVariant` or `MessageCompact`, or whether the task ID was provided or not. Log activity was
+I used [picobench](https://github.com/iboB/picobench) for benchmarks using the supplied benchmark apps. Here are some averaged results measured over 8192 iterations on my Intel(R) Xeon(R) CPU E31220L @ 2.20GHz. Compiled using `clang++ -O2`. There were no significant differences for `MessageVariant` or `MessageCompact`, or whether the task ID was provided or not. Log activity was
 - print header
   - print task name
   - print timestamp
@@ -191,10 +191,10 @@ Here are benchmark results of atomic logging `int32_t` values, measured on 20971
 
 ## Space requirements
 
-I have investigated several scenarios using simple applications which contain practically nothing but a task creation apart of the logging. This way I could measure the net space required by the log library and its necessary supplementary functions like std::unordered_set or floating-point emulation for log10.
+I have investigated several scenarios using simple applications which contain practically nothing but a task creation apart of the logging. This way, I could measure the net space required by the log library and its necessary supplementary functions, such as std::unordered_set or floating-point emulation for log10.
 
-For desktop, I used clang version 10.0.0 on x64. For embedded, I used arm-none-eabi-g++ 10.1.1 on STM32 Cortex M3. This MCU needs emulation for floating point. All measurements were conducted using -Os. I present the net growths in segments text, data and BSS for each of the following scenarios:
-- direct logging (for single threaded applications)
+For desktop, I used clang version 10.0.0 on x64. For embedded development, I used arm-none-eabi-g++ 10.1.1 on an STM32 Cortex-M3. This MCU requires emulation for floating-point operations. All measurements were conducted using -Os. I present the net growth in segments, text, data and BSS for each of the following scenarios:
+- direct logging (for single-threaded applications)
 - logging turned off with SenderVoid
 - logging with queue using MessageVariant (for multithreaded applications)
 - logging with queue using MessageCompact (for multithreaded applications)
@@ -215,7 +215,7 @@ To obtain net results, I put some floating-point operations in the application *
 
 ### FreeRTOS without floating point
 
-No floating point arithmetics in the application and the support is turned off in the logger. Source is *test-sizes-freertosminimal-nofloat.cpp*. Note , only this table contains values from the _only atomic logging_ scenario, since atomic logging assumes only integral types.
+No floating-point arithmetic is used in the application, and support is turned off in the logger. Source is *test-sizes-freertosminimal-nofloat.cpp*. Note, only this table contains values from the _only atomic logging_ scenario, since atomic logging assumes only integral types.
 
 |Atomic|Mode              |   Text|  Data|    BSS|
 |------|------------------|------:|-----:|------:|
@@ -228,13 +228,13 @@ No floating point arithmetics in the application and the support is turned off i
 |off   |multitask, compact|6140   |8     |84     |
 |on    |multitask, compact|6868   |8     |108    |
 
-* = when only using atomic logging, multitasking mode is meaningless.
+* = When only using atomic logging, multitasking mode is meaningless.
 
 ## API
 
 ### Supported types
 
-As all major coding standards suggest, use of integer types with indeterminate size is discouraged, so this library does not support `long` or `unsigned`.
+As all major coding standards suggest, the use of integer types with indeterminate size is discouraged; therefore, this library does not support `long` or `unsigned`.
 
 `LogFormat` is a struct holding the numeric base and the fill value. It is easiest to reach in `LogConfig`.
 
@@ -257,20 +257,20 @@ As all major coding standards suggest, use of integer types with indeterminate s
 |`char const *` |for `LC::St` prefix        |Only a limited length of _payload size_ * 255 characters can be transferred from a transient string.|
 |`std::string`  |no                         |Implicitely adds `LC::St` prefix, since `std::string` instances are usually mutable.|
 
-64-bit integer types require emulation on 32-bit architectures. By default, `LogConverterCustomText`'s templated conversion routine use 32-bit numbers to gain speed. Using 64-bit operands instantiates the 64-bit emulated routines as well, which takes extra flash space on embedded.
+64-bit integer types require emulation on 32-bit architectures. By default, `LogConverterCustomText`'s templated conversion routine uses 32-bit numbers to gain speed. Using 64-bit operands instantiates the 64-bit emulated routines as well, which takes extra flash space on embedded.
 
 ### Initialization
 
-Log system initialiation consists of the following steps:
+Log system initialisation consists of the following steps:
 1. Declare possible topics (see next section).
 2. Instantiate templates.
-3. Define and fill `LogConfig` struct. All its fields have default value.
-4. Initialize the _Sender_. This has implementation-specific arguments for the actual output.
+3. Define and fill `LogConfig` struct. All its fields have a default value.
+4. Initialise the _Sender_. This has implementation-specific arguments for the actual output.
 5. Initialize the _Log_ using the _LogConfig_ instance.
-6. Register the required topics (see nextr section).
+6. Register the required topics (see next section).
 7. Call `Log::registerCurrentTask("task name");` for  each interested task. Other tasks won't be able to log.
 
-Refer the beginning for an example for STL without the first step. Here is a FreeRTOS template declaration without floating point support but for multithreaded mode:
+Refer to the beginning for an example of STL without the first step. Here is a FreeRTOS template declaration without floating point support, but for multithreaded mode:
 
 ```C++
 constexpr nowtech::log::TaskId cgMaxTaskCount = cgThreadCount + 1;
@@ -320,13 +320,13 @@ Explanation of configuration parameters:
 |`bool tAlignSigned`                                       |_Converter_              |If true, positive numbers will get an extra ' ' to be aligned with negatives. |
 |`typename tAppInterface`                                  |_Sender_                 |The _app interface_ type to use.|
 |`typename tConverter`                                     |_Sender_                 |The _Converter_ type to use.|
-|`size_t tTransmitBufferSize`                              |_Sender_                 |Length of buffer to use for conversion. This should be sufficient for the joint size of possible items in the largest group.|
+|`size_t tTransmitBufferSize`                              |_Sender_                 |Length of buffer to use for conversion. This should be sufficient for the joint size of the largest group of possible items.|
 |`typename tAppInterface::LogTime tTimeout`                |_Sender_                 |Timeout in implementation-defined unit (usually ms) for transmission.|
 |`typename tMessage`                                       |_Queue_                  |The _Message_ type to use.|
 |`typename tAppInterface`                                  |_Queue_                  |The _app interface_ type to use.|
 |`size_t tQueueSize`                                       |_Queue_                  |Number of items the queue should hold. This applies to the master queue and to the aggregated capacity of the per-task queues.|
 |`typename tAppInterface`                                  |`AtomicBufferOperational`|The _app interface_ to use.|
-|`typename tAtomicBufferType`                              |`AtomicBufferOperational`|The type to log as atomic, only integral types are allowed.|
+|`typename tAtomicBufferType`                              |`AtomicBufferOperational`|The type to log as atomic; only integral types are allowed.|
 |`tAtomicBufferSizeExponent`                               |`AtomicBufferOperational`|Exponent of the buffer size (base of the power is 2). For numeric reasons, the buffer size is always a power of 2.|
 |`tAtomicBufferType tInvalidValue`                         |`AtomicBufferOperational`|Invalid value, which won't be sent when all the buffer contents are being sent.|
 |`typename tQueue`                                         |`Log`                    |The _Queue_ type to use.|
@@ -336,8 +336,8 @@ Explanation of configuration parameters:
 |`bool allowRegistrationLog`                               |`Config`                 |True if task (un)registering should be logged.|
 |`LogTopic tMaxTopicCount`                                 |`Config`                 |LogTopic is `int8_t`. Maximum is 127.|
 |`TaskRepresentation tTaskRepresentation`                  |`Config`                 |One of `cNone` (for omitting it), `cId` (for numeric task ID), `cName` (for task name).|
-|`size_t tDirectBufferSize`                                |`Config`                 |When 0, the given _Queue_ will be used. Otherwise, it is the size of a buffer on stack to hold a converted item before sending it.|
-|`int32_t tRefreshPeriod`                                  |`Config`                 |Timeout in implementation-defined unit (usually ms) for waiting on the queue before sending what already present.|
+|`size_t tDirectBufferSize`                                |`Config`                 |When 0, the given _Queue_ will be used. Otherwise, it is the size of a buffer on the stack to hold a converted item before sending it.|
+|`int32_t tRefreshPeriod`                                  |`Config`                 |Timeout in implementation-defined unit (usually ms) for waiting on the queue before sending what is already present.|
 |`ErrorLevel tErrorLevel`                                  |`Config`                 |The application log level with the default value `ErrorLevel::All`.|
 |`LogFormat atomicFormat`                                  |`LogFormatConfig`        |Format used for converting the bulk data in the _AtomicBuffer_.
 |`LogFormat taskIdFormat`                                  |`LogFormatConfig`        |Format of task ID to use when `tTaskRepresentation == TaskRepresentation::cId`.|
@@ -346,7 +346,7 @@ Explanation of configuration parameters:
 
 ### Topics and log levels
 
-The log system supports individually selectable topics to log. I've decided so because we needed a much finer granularity than the tradiotional log levels. These topics have to be declared first, after which they still would be disabled.
+The log system supports individually selectable topics to log. I've decided so because we needed a much finer granularity than the traditional log levels. These topics must be declared first, after which they will still be disabled.
 
 ```C++
 namespace nowtech::LogTopics {
@@ -358,13 +358,13 @@ nowtech::log::TopicInstance someOtherTopic;
 }
 ```
 
-To enable some of them, the interesting ones must be registered in the log system. When the log system receives `LogTopic` parameter, it will be logged regardless of the actual applicaiton log level.
+To enable some of them, the interesting ones must be registered in the log system. When the log system receives the `LogTopic` parameter, it will be logged regardless of the actual application log level.
 
 There are three possibilities to use log levels.
 
 #### Native log levels
 
-The `Log` class takes an optional template argument, the application log level. The `Log::n(...)` and `Log::i(...)` functions' overloads without operands and taking a `TaskId` (see below) are templated methods with a default value of `ErrorLevel::All`. By providing template values these for methods, the given instantiation chooses between a functional and an empty return value. As the empty one will be fully optimized out for unused log levels, this is more performant than the next one. The log system has these predefined log levels in `Log`:
+The `Log` class takes an optional template argument, the application log level. The `Log::n(...)` and `Log::i(...)` functions' overloads without operands and taking a `TaskId` (see below) are templated methods with a default value of `ErrorLevel::All`. By providing template values for these methods, the given instantiation chooses between a functional and an empty return value. As the empty one will be fully optimised out for unused log levels, this is more performant than the next one. The log system has these predefined log levels in `Log`:
 
 ```C++
 static constexpr ErrorLevel fatal = ErrorLevel::Fatal;
@@ -383,7 +383,7 @@ Log::i<Log::debug>() << "x:" << LC::D4 << posX << "y:" << LC::D4 << posY << Log:
 
 #### Emulated log levels
 
-For topic declarations, please refer above. This method suits better architectures with limited flash space, since it requires no internal method instantiation for each log level used. However, checking topics is a runtime process and total elimination of unused log statements won't happen for optimizing compilation.
+For topic declarations, please refer to the section above. This method suits better architectures with limited flash space, since it requires no internal method instantiation for each log level used. However, checking topics is a runtime process, and total elimination of unused log statements won't happen for optimising compilation.
 
 ```C++
 #ifdef LEVEL1
@@ -400,13 +400,13 @@ Log::registerTopic(nowtech::LogTopics::level3, "level3");
 
 #### Variadic macros
 
-C++20 has suitable variadic macros in the preprocessor, which would enable one to use the folding expression API to define preprocessor-implemented loglevels. I didn't implement it. This would mean a perfect solution from performance and space point of view.
+C++20 features suitable variadic macros in the preprocessor, enabling the use of the folding expression API to define preprocessor-implemented log levels. I didn't implement it. This would mean a perfect solution from a performance and space point of view.
 
 ### Logging
 
 #### Group logging
 
-All the logging API is implemented as static functions in the `Log` template class. Logging happens using a `std::ostream` -like API, like in the example in the beginning. There are two overloaded functions to start the chain:
+All logging APIs are implemented as static functions in the `Log` template class. Logging happens using a `std::ostream` -like API, like in the example at the beginning. There are two overloaded functions to start the chain:
 - `static LogShiftChainHelper i(...) noexcept` writes any header configured for the application.
 - `static LogShiftChainHelper n(...) noexcept` omits this header, just writes the actual stuff it receives using `<<`.
 Note, LogShiftChainHelper implementation depends on the given log mode (direct / queued / shut off).
@@ -414,12 +414,12 @@ Note, LogShiftChainHelper implementation depends on the given log mode (direct /
 Each function has four overloads with the following parameter signatures:
 - `()` - logs unconditionally, and queries the task ID.
 - `(TaskId const aTaskId)` - logs unconditionally using the supplied task ID.
-- `(LogTopic const aTopic)` - logs depending on the given task ID was registered, and queries the task ID.
-- `(LogTopic const aTopic, TaskId const aTaskId)` - logs depending on the given task ID was registered using the supplied task ID.
+- `(LogTopic const aTopic)` - logs depending on the given task ID were registered, and queries the task ID.
+- `(LogTopic const aTopic, TaskId const aTaskId)` - logs depending on the given task ID were registered using the supplied task ID.
 
-One can use the `static TaskId getCurrentTaskId() noexcept` function to query the current task ID and store it, This can be important if querying the task ID is expensive on the given platform.
+One can use the `static TaskId getCurrentTaskId() noexcept` function to query the current task ID and store it. This can be important if querying the task ID is expensive on the given platform.
 
-If you have many or unknown number of items to log, you can use the form
+If you have many or an unknown number of items to log, you can use the form
 
 ```C++
 auto logger = Log::n() << "someCollection contgents:";
@@ -435,7 +435,7 @@ I've implemented a function call-like entry point using C++17 folding expression
 Log::f(Log::i(nowtech::LogTopics::someTopic), some, variables, follow);
 ```
 
-and apart of being clumsy, it is even takes more binary space than the `std::ostream` -like API it uses under the hood. It appends `Log::end` automatically.
+and apart from being clumsy, it even takes more binary space than the `std::ostream` -like API it uses under the hood. It appends `Log::end` automatically.
 
 #### Atomic logging
 
@@ -446,10 +446,10 @@ int16_t value = 13;
 Log::pushAtomic(value);
 ```
 
-Of course this is only effective if the logging is on and the `AtomicBufferOperational` class is being used. These values are accepted from any task or ISR and land in a circular buffer, which is continuously overwritten. To extract the contents, first the application should stop calling `Log::pushAtomic` because the slower readout would produce undefined behaviour when still being written into. (There is no locking for maximum performance.) Then, a task with valid log registry should call
+Of course, this is only effective if the logging is on and the `AtomicBufferOperational` class is being used. These values are accepted from any task or ISR and land in a circular buffer, which is continuously overwritten. To extract the contents, the application should first stop calling `Log::pushAtomic`, as the slower readout would produce undefined behaviour when it is still being written to. (There is no locking for maximum performance.) Then, a task with a valid log registry should call
 
 ```C++
 Log::sendAtomicBuffer();
 ```
 
-which is a blocking call. Note, in multithreaded mode sending from all other tasks won't happen, only the queues will hold the messages from concurrent logging as long as they can.
+which is a blocking call. Note that in multithreaded mode, sending from all other tasks will not occur; only the queues will hold messages from concurrent logging as long as possible.
