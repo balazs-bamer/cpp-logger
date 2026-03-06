@@ -439,8 +439,16 @@ public:
       sConfig = &aConfig;
       if constexpr(csSendInBackground) {
         std::byte experiment[sizeof(tMessage) + csListItemOverhead];
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#pragma GCC diagnostic ignored "-Wuninitialized"
+#endif
         tMessage example;
         size_t nodeSize = memory::AllocatorBlockGauge<std::list<tMessage>>::getNodeSize(experiment, example);
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
         sAllocator = tAppInterface::template _new<Allocator>(csQueueSize, nodeSize, sOccupier);
         sMessageQueues = tAppInterface::template _new<MessageQueueArray>();
         sTaskShutdowns = tAppInterface::template _new<TaskShutdownArray>();

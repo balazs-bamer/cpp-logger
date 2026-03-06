@@ -189,7 +189,7 @@ private:
     }
     else { // nothing to do
     }
-    if(tAppendBasePrefix) {
+    if constexpr(tAppendBasePrefix) {
       if (aBase == 2u) {
         append(csNumericFill);
         append(csNumericMarkBinary);

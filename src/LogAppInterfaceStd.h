@@ -6,7 +6,8 @@
 #include <mutex>
 #include <chrono>
 #include <thread>
-#include <unordered_set>
+#include <array>
+#include <algorithm>
 #include <condition_variable>
 
 namespace nowtech::log {
@@ -73,12 +74,10 @@ private:
   inline static constexpr char   csFatalError[]       = "Fatal: ";
   inline static constexpr char   csUnknownTaskName[]  = "UNKNOWN";
   inline static constexpr char   csIsrTaskName[]      = "ISR";
-  inline static constexpr size_t csTaskId2threadsSize = csMaxTaskCount + 1u;
-  inline static const std::thread::id csNoThreadId;
 
   inline static thread_local TaskId shTaskId = csInvalidTaskId;
   inline static thread_local std::string shTaskName;
-  inline static std::unordered_set<TaskId> sFreeTaskIds;
+  inline static std::array<bool, csMaxTaskCount + 1u> sFreeTaskIds;
   inline static std::mutex sRegistrationMutex;
   inline static std::thread *sTransmitterThread;
   
@@ -86,9 +85,7 @@ private:
 
 public:
   static void init() {
-    for(TaskId id = csFirstNormalTaskId; id <= tMaxTaskCount; ++id) {
-      sFreeTaskIds.insert(id);
-    }
+    sFreeTaskIds.fill(true);
   }
 
   static void init(void(*aFunction)(void)) {
@@ -103,7 +100,6 @@ public:
     }
     else { // nothing to do
     }
-    sFreeTaskIds.clear();
   }
 
   /// We assume it won't get called during registering.
@@ -114,11 +110,11 @@ public:
   static TaskId registerCurrentTask(char const * const aTaskName) {
     std::lock_guard<std::mutex> lock (sRegistrationMutex);
     TaskId result;
-    if(!sFreeTaskIds.empty()) {
-      auto begin = sFreeTaskIds.begin();
-      shTaskId = result = *begin;
+    auto it = std::find(sFreeTaskIds.begin() + csFirstNormalTaskId, sFreeTaskIds.end(), true);
+    if(it != sFreeTaskIds.end()) {
+      shTaskId = result = static_cast<TaskId>(it - sFreeTaskIds.begin());
       shTaskName = aTaskName;
-      sFreeTaskIds.erase(begin);
+      *it = false;
     }
     else {
       result = csInvalidTaskId;
@@ -128,7 +124,7 @@ public:
 
   static TaskId unregisterCurrentTask() {
     std::lock_guard<std::mutex> lock (sRegistrationMutex);
-    sFreeTaskIds.insert(shTaskId);
+    sFreeTaskIds[shTaskId] = true;
     shTaskId = csInvalidTaskId;
     return csInvalidTaskId;
   }
