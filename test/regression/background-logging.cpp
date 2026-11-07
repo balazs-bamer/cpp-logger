@@ -26,7 +26,12 @@ int main() {
       Log::registerCurrentTask(cgThreadNames[thread]);
       gate.wait();
       for(uint32_t i = 0u; i < cgLinesPerThread; ++i) {
-        Log::n() << "line" << thread << i << Log::end;
+        if(i % 2u == 0u) {
+          Log::n() << "line" << thread << i << Log::end;
+        }
+        else {
+          Log::n() << "line" << thread << i;   // Ended by the helper's destructor.
+        }
       }
       Log::unregisterCurrentTask();
     });

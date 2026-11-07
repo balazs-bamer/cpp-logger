@@ -1,8 +1,9 @@
 // REVIEW.md bug 6: in direct mode AppInterfaceStd::lock() and unlock() did nothing, and Log only
 // called them around each item anyway, so lines logged by several threads came out mixed, and
 // the threads wrote the output stream at the same time. Now a line holds the lock from its first
-// item to Log::end. Every line must come out whole, an atomic buffer dump included. A value whose
-// computation logs on the same thread must not deadlock, the lock is recursive.
+// item to its end, at Log::end or in the helper's destructor. Every line must come out whole, an
+// atomic buffer dump included. A value whose computation logs on the same thread must not
+// deadlock, the lock is recursive.
 
 #define LOG_TEST_MAX_TASKS 5u
 #include "TestLog.h"
@@ -35,8 +36,15 @@ int main() {
     threads.emplace_back([thread, &gate]{
       Log::registerCurrentTask(cgThreadNames[thread]);
       gate.wait();
-      for(uint32_t i = 0u; i < cgLinesPerThread; ++i) {
-        Log::i() << "line" << thread << i << "a" << "b" << "c" << "end" << Log::end;   // The header is part of the line.
+      for(uint32_t i = 0u; i < cgLinesPerThread; ++i) {   // The header is part of the line.
+        if(i % 2u == 0u) {
+          Log::i() << "line" << thread << i << "a" << "b" << "c" << "end" << Log::end;
+        }
+        else {
+          auto logger = Log::i() << "line" << thread;   // Ended by the destructor, which also releases the lock.
+          logger << i << "a" << "b";
+          logger << "c" << "end";
+        }
       }
       Log::unregisterCurrentTask();
     });

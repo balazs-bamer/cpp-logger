@@ -10,6 +10,7 @@
 #include <atomic>
 #include <limits>
 #include <array>
+#include <utility>
 
 namespace nowtech::log {
   
@@ -278,7 +279,9 @@ private:
                   "This type doesn't fit the message payload, increase its size.");
   }
 
-  /// This will be used to send via queue. It stores the first message, and sends it only with the terminal marker.
+  /// This will be used to send via queue. It stores the first message, and sends it only when the group ends:
+  /// at Log::end, or when the helper is destroyed. A helper with a valid task ID owns its group. It is
+  /// move-only, and moving hands the group over.
   class LogShiftChainHelperBackgroundSend final {
   private:
     inline static constexpr char      csEmptyString[] = "";
@@ -302,13 +305,31 @@ private:
       mNextFormat.invalidate();
     }
 
+    LogShiftChainHelperBackgroundSend(LogShiftChainHelperBackgroundSend const &) = delete;
+
+    LogShiftChainHelperBackgroundSend(LogShiftChainHelperBackgroundSend &&aOther) noexcept
+     : mTaskId(aOther.mTaskId)
+     , mNextFormat(aOther.mNextFormat)
+     , mNextSequence(aOther.mNextSequence)
+     , mFirstMessage(aOther.mFirstMessage)
+     , mWasMessage(aOther.mWasMessage) {
+      aOther.mTaskId = csInvalidTaskId;
+    }
+
+    LogShiftChainHelperBackgroundSend& operator=(LogShiftChainHelperBackgroundSend const &) = delete;
+    LogShiftChainHelperBackgroundSend& operator=(LogShiftChainHelperBackgroundSend &&) = delete;
+
+    ~LogShiftChainHelperBackgroundSend() noexcept {
+      finish();
+    }
+
     /// Can be used in application code to eliminate further operator<< calls when the topic is disabled.
     bool isValid() const noexcept {
       return mTaskId != csInvalidTaskId;
     }
 
     template<typename tValue>
-    LogShiftChainHelperBackgroundSend& operator<<(tValue const aValue) noexcept {
+    LogShiftChainHelperBackgroundSend& operator<<(tValue const aValue) & noexcept {
       checkLoggable<tValue>();
       if constexpr(isLoggable<tValue>()) {
         if(mTaskId != csInvalidTaskId && mNextSequence < std::numeric_limits<MessageSequence>::max()) {
@@ -325,25 +346,42 @@ private:
       return *this;
     }
 
-    LogShiftChainHelperBackgroundSend& operator<<(char * const aValue) noexcept {
+    LogShiftChainHelperBackgroundSend& operator<<(char * const aValue) & noexcept {
       return sendCharPointer(aValue);
     }
 
-    LogShiftChainHelperBackgroundSend& operator<<(char const * const aValue) noexcept {
+    LogShiftChainHelperBackgroundSend& operator<<(char const * const aValue) & noexcept {
       return sendCharPointer(aValue);
     }
 
-    LogShiftChainHelperBackgroundSend& operator<<(std::string const &aValue) noexcept {
+    LogShiftChainHelperBackgroundSend& operator<<(std::string const &aValue) & noexcept {
       mNextFormat = LogFormatConfig::St;
       return sendCharPointer(aValue.c_str());
     }
 
-    LogShiftChainHelperBackgroundSend& operator<<(LogFormat const aFormat) noexcept {
+    LogShiftChainHelperBackgroundSend& operator<<(LogFormat const aFormat) & noexcept {
       mNextFormat = aFormat;
       return *this;
     }
 
-    void operator<<(LogShiftChainEndMarker const) noexcept {
+    /// A chain on a temporary, like Log::n() << a << b, keeps it an rvalue, so auto logger = Log::n() << a;
+    /// moves it into logger. Never bind a chain result to auto&&, the temporary dies at the end of the statement.
+    template<typename tValue>
+    LogShiftChainHelperBackgroundSend&& operator<<(tValue &&aValue) && noexcept {
+      return std::move(*this << std::forward<tValue>(aValue));
+    }
+
+    void operator<<(LogShiftChainEndMarker const) & noexcept {
+      finish();
+    }
+
+    /// On a temporary the destructor ends the group at the end of the same statement, ending it here too would
+    /// cost a second call per statement.
+    void operator<<(LogShiftChainEndMarker const) && noexcept {
+    }
+
+  private:
+    void finish() noexcept {
       if(mTaskId != csInvalidTaskId) {
         if(!mWasMessage) {
           mFirstMessage.set(csEmptyString, csEmptyFormat, mTaskId, csSequence0);
@@ -351,12 +389,12 @@ private:
         else { // nothing to do
         }
         tQueue::push(mFirstMessage);
+        mTaskId = csInvalidTaskId;   // Ended, the destructor has nothing left to do.
       }
       else { // nothing to do
       }
     }
 
-  private:
     LogShiftChainHelperBackgroundSend& sendCharPointer(char const * aValue) noexcept {
       if(mTaskId != csInvalidTaskId && mNextSequence < std::numeric_limits<MessageSequence>::max()) {
         aValue = (aValue != nullptr) ? aValue : csNullString;
@@ -417,10 +455,12 @@ private:
   }; // class LogShiftChainHelperBackgroundSend
 
   /// This will be used to send directly, blocking the current thread.
+  /// The group ends at Log::end, or when the helper is destroyed. A helper with a valid task ID owns its
+  /// group. It is move-only, and moving hands the group over.
   class LogShiftChainHelperDirectSend final {
     TaskId          mTaskId;
     LogFormat       mNextFormat;
-    bool            mLocked;   // tAppInterface::lock() is held from the first item to Log::end, so lines from tasks don't mix.
+    bool            mLocked;   // tAppInterface::lock() is held from the first item to the end, so lines from tasks don't mix.
 
   public:
     LogShiftChainHelperDirectSend() noexcept = delete;
@@ -431,13 +471,30 @@ private:
        mNextFormat.invalidate();
     }
 
+    LogShiftChainHelperDirectSend(LogShiftChainHelperDirectSend const &) = delete;
+
+    LogShiftChainHelperDirectSend(LogShiftChainHelperDirectSend &&aOther) noexcept
+     : mTaskId(aOther.mTaskId)
+     , mNextFormat(aOther.mNextFormat)
+     , mLocked(aOther.mLocked) {
+      aOther.mTaskId = csInvalidTaskId;
+      aOther.mLocked = false;
+    }
+
+    LogShiftChainHelperDirectSend& operator=(LogShiftChainHelperDirectSend const &) = delete;
+    LogShiftChainHelperDirectSend& operator=(LogShiftChainHelperDirectSend &&) = delete;
+
+    ~LogShiftChainHelperDirectSend() noexcept {
+      finish();
+    }
+
     /// Can be used in application code to eliminate further operator<< calls when the topic is disabled.
     bool isValid() const noexcept {
       return mTaskId != csInvalidTaskId;
     }
 
     template<typename tValue>
-    LogShiftChainHelperDirectSend& operator<<(tValue const aValue) noexcept {
+    LogShiftChainHelperDirectSend& operator<<(tValue const aValue) & noexcept {
       checkLoggable<tValue>();
       if constexpr(isLoggable<tValue>()) {
         return convertAndSend(static_cast<LoggedType<tValue>>(aValue));
@@ -447,24 +504,41 @@ private:
       }
     }
 
-    LogShiftChainHelperDirectSend& operator<<(char * const aValue) noexcept {
+    LogShiftChainHelperDirectSend& operator<<(char * const aValue) & noexcept {
       return operator<<(static_cast<char const *>(aValue));
     }
 
-    LogShiftChainHelperDirectSend& operator<<(char const * const aValue) noexcept {
+    LogShiftChainHelperDirectSend& operator<<(char const * const aValue) & noexcept {
       return convertAndSend((aValue != nullptr) ? aValue : csNullString);
     }
 
-    LogShiftChainHelperDirectSend& operator<<(std::string const &aValue) noexcept {   // Converted right away, no need to copy.
+    LogShiftChainHelperDirectSend& operator<<(std::string const &aValue) & noexcept {   // Converted right away, no need to copy.
       return operator<<(aValue.c_str());
     }
 
-    LogShiftChainHelperDirectSend& operator<<(LogFormat const aFormat) noexcept {
+    LogShiftChainHelperDirectSend& operator<<(LogFormat const aFormat) & noexcept {
       mNextFormat = aFormat;
       return *this;
     }
 
-    void operator<<(LogShiftChainEndMarker const) noexcept {
+    /// A chain on a temporary, like Log::n() << a << b, keeps it an rvalue, so auto logger = Log::n() << a;
+    /// moves it into logger. Never bind a chain result to auto&&, the temporary dies at the end of the statement.
+    template<typename tValue>
+    LogShiftChainHelperDirectSend&& operator<<(tValue &&aValue) && noexcept {
+      return std::move(*this << std::forward<tValue>(aValue));
+    }
+
+    void operator<<(LogShiftChainEndMarker const) & noexcept {
+      finish();
+    }
+
+    /// On a temporary the destructor ends the group at the end of the same statement, ending it here too would
+    /// cost a second call per statement.
+    void operator<<(LogShiftChainEndMarker const) && noexcept {
+    }
+
+  private:
+    void finish() noexcept {
       if(mTaskId != csInvalidTaskId) {
         ConversionResult buffer[csDirectBufferSize];
         tConverter converter(buffer, buffer + csDirectBufferSize);
@@ -473,12 +547,12 @@ private:
         tSender::send(buffer, converter.end());
         tAppInterface::unlock();
         mLocked = false;
+        mTaskId = csInvalidTaskId;   // Ended, the destructor has nothing left to do.
       }
       else { // nothing to do
       }
     }
 
-  private:
     void lockOnce() noexcept {
       if(!mLocked) {
         tAppInterface::lock();
@@ -519,31 +593,43 @@ private:
     LogShiftChainHelperEmpty(TaskId const) noexcept {
     }
 
+    // Move-only like the others, so code compiles the same with logging compiled out. Trivial destructor.
+    LogShiftChainHelperEmpty(LogShiftChainHelperEmpty const &) = delete;
+    LogShiftChainHelperEmpty(LogShiftChainHelperEmpty &&) noexcept = default;
+    LogShiftChainHelperEmpty& operator=(LogShiftChainHelperEmpty const &) = delete;
+    LogShiftChainHelperEmpty& operator=(LogShiftChainHelperEmpty &&) = delete;
+    ~LogShiftChainHelperEmpty() noexcept = default;
+
     /// Can be used in application code to eliminate further operator<< calls when the topic is disabled.
     bool isValid() const noexcept {
       return false;
     }
 
     template<typename tValue>
-    LogShiftChainHelperEmpty& operator<<(tValue const) noexcept {
+    LogShiftChainHelperEmpty& operator<<(tValue const) & noexcept {
       checkLoggable<tValue>();
       return *this;
     }
 
-    LogShiftChainHelperEmpty& operator<<(char * const) noexcept {
+    LogShiftChainHelperEmpty& operator<<(char * const) & noexcept {
       return *this;
     }
 
-    LogShiftChainHelperEmpty& operator<<(char const * const) noexcept {
+    LogShiftChainHelperEmpty& operator<<(char const * const) & noexcept {
       return *this;
     }
 
-    LogShiftChainHelperEmpty& operator<<(std::string const &) noexcept {
+    LogShiftChainHelperEmpty& operator<<(std::string const &) & noexcept {
       return *this;
     }
 
-    LogShiftChainHelperEmpty& operator<<(LogFormat const) noexcept {
+    LogShiftChainHelperEmpty& operator<<(LogFormat const) & noexcept {
       return *this;
+    }
+
+    template<typename tValue>
+    LogShiftChainHelperEmpty&& operator<<(tValue &&aValue) && noexcept {
+      return std::move(*this << std::forward<tValue>(aValue));
     }
 
     void operator<<(LogShiftChainEndMarker const) noexcept {

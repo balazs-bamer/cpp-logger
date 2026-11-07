@@ -16,7 +16,7 @@ auto logger = Log::n<Log::debug>() << "bulk data follows:"; // one group of many
 for(auto item : someCollection) {
   logger << LC::X4 << item;                     // format: hexadecimal, fill to 4 digits
 }
-logger << Log::end;                             // the group of many items ends
+logger << Log::end;                             // the group of many items ends, or when logger goes out of scope
 
 //...
 
@@ -74,7 +74,7 @@ The logger consists of six classes:
 - _Config_ - provides some configuration parameters.
 
 The logger can operate in two modes:
-- Direct without queue, when the conversion and sending happen without message instantiation and queue usage. This can be useful for single-threaded applications. Lines from different tasks don't mix: a line holds the _App interface_ lock from its first item until `Log::end`, so a line missing `Log::end` blocks direct logging in all other tasks.
+- Direct without queue, when the conversion and sending happen without message instantiation and queue usage. This can be useful for single-threaded applications. Lines from different tasks don't mix: a line holds the _App interface_ lock from its first item until it ends, so a long-lived named helper (see below) blocks direct logging in all other tasks.
 - With a queue, when each item is sent, it will form one or more (in case of stored strings) messages and use a central thread-safe queue. On the other end of the queue, a background thread pops the messages and groups them by tasks in secondary lists. When a group of related items from a task has arrived, its conversion and sending begin.
 
 ## Implementations
@@ -422,12 +422,20 @@ One can use the `static TaskId getCurrentTaskId() noexcept` function to query th
 If you have many or an unknown number of items to log, you can use the form
 
 ```C++
-auto logger = Log::n() << "someCollection contgents:";
+auto logger = Log::n() << "someCollection contents:";
 for(auto item : someCollection) {
   logger << item;
 }
 logger << Log::end;  // the group of many items ends
 ```
+
+A group also ends when its helper is destroyed, so `Log::end` is optional:
+- A temporary helper ends at the end of its statement: `Log::n() << "x:" << x;` is a complete group. With `Log::end` it ends at the same point.
+- A named helper ends at `Log::end`, or at the end of its scope.
+- Helpers are move-only, moving one hands the group over. `auto logger = Log::n() << "x";` moves the temporary into `logger`.
+- Always use `auto` for a named helper. `auto&` on a chain result doesn't compile, and `auto&& logger = Log::n() << "x";` compiles but refers to the temporary, which ends its group and dies at the end of the statement.
+- Several temporary helpers in one statement end in reverse order at its end, for example `Log::n() << a << Log::end, Log::n() << b;` logs the line of `b` first.
+- Don't start another group in the same task while a named helper is open. In queued mode the two groups corrupt each other, and in direct mode the open helper holds the output lock.
 
 I've implemented a function call-like entry point using C++17 folding expressions. To be honest, this is just a _why not_ solution, and not an integral part of the API. It gets called like
 
