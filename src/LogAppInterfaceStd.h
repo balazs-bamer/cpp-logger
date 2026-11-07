@@ -115,7 +115,7 @@ public:
     auto it = std::find(sFreeTaskIds.begin() + csFirstNormalTaskId, sFreeTaskIds.end(), true);
     if(it != sFreeTaskIds.end()) {
       shTaskId = result = static_cast<TaskId>(it - sFreeTaskIds.begin());
-      shTaskName = aTaskName;
+      shTaskName = (aTaskName != nullptr) ? aTaskName : csUnknownTaskName;
       *it = false;
     }
     else {

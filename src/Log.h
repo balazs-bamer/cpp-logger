@@ -498,7 +498,8 @@ public:
   /// Registers the current task if not already present. It can register
   /// at most 254 tasks. All others will be handled as one.
   /// NOTE: this method locks to inhibit concurrent access of methods with the same name.
-  static void registerCurrentTask() noexcept {
+  /// Not noexcept: tAppInterface::fatalError may throw when running out of task IDs.
+  static void registerCurrentTask() {
     if constexpr(!csShutdownLog) {
       registerCurrentTask(nullptr);
     }
@@ -508,7 +509,7 @@ public:
 
 /// Registers the current task if not already present. It can register
   /// at most 254 tasks. All others will be handled as one.
-  /// @param aTaskName Task name to use, when the osInterface supports it.
+  /// @param aTaskName Task name to use, when the osInterface supports it. May be nullptr.
   static void registerCurrentTask(char const * const aTaskName) {
     if constexpr(!csShutdownLog) {
       TaskId taskId = tAppInterface::registerCurrentTask(aTaskName);
@@ -519,7 +520,11 @@ public:
         else { // nothing to do
         }
         if constexpr(csAllowRegistrationLog) {
-          n(taskId) << csRegisteredTask << aTaskName << taskId << end;
+          // Log the name the logger will use, aTaskName may be nullptr or ignored by tAppInterface.
+          auto logger = n(taskId);
+          logger << csRegisteredTask;
+          appendTaskName(logger, taskId);
+          logger << taskId << end;
         }
         else { // nothing to do
         }
@@ -713,6 +718,16 @@ public:
 
 private:
   template <typename tLogShiftChainHelper>
+  static void appendTaskName(tLogShiftChainHelper &aLogger, TaskId const aTaskId) noexcept {
+    if constexpr (csConstantTaskNames || !csSendInBackground) {
+      aLogger << tAppInterface::getTaskName(aTaskId);
+    }
+    else {  // The name may change or go away before the transmitter converts it, so copy it.
+      aLogger << LogFormatConfig::St << tAppInterface::getTaskName(aTaskId);
+    }
+  }
+
+  template <typename tLogShiftChainHelper>
   static tLogShiftChainHelper sendHeader(TaskId const aTaskId) noexcept {
     tLogShiftChainHelper result{aTaskId};
     if(result.isValid()) {
@@ -720,12 +735,7 @@ private:
         result << sConfig->taskIdFormat << aTaskId;
       }
       else if constexpr (csTaskRepresentation == TaskRepresentation::cName) {
-        if constexpr (csConstantTaskNames || !csSendInBackground) {
-          result << tAppInterface::getTaskName(aTaskId);
-        }
-        else {
-          result << LogFormatConfig::St << tAppInterface::getTaskName(aTaskId);
-        }
+        appendTaskName(result, aTaskId);
       }
       else { // nothing to do
       }
