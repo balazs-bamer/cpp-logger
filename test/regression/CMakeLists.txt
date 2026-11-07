@@ -43,6 +43,7 @@ add_regression_test(types-compact types.cpp)
 add_regression_test(types-variant types.cpp LOG_TEST_MESSAGE_VARIANT)
 add_regression_test(types-direct types.cpp LOG_TEST_DIRECT)
 add_regression_test(types-shutdown types.cpp LOG_TEST_SHUTDOWN)
+add_regression_test(direct-threads direct-threads.cpp LOG_TEST_DIRECT)
 
 # Values the logger can't handle must not compile. Each test builds a target that logs one, and
 # passes when the build fails with the given part of the logger's static_assert message.

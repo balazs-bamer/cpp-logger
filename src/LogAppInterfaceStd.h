@@ -81,6 +81,7 @@ private:
   inline static thread_local std::string shTaskName;
   inline static std::array<bool, csMaxTaskCount + 1u> sFreeTaskIds;
   inline static std::mutex sRegistrationMutex;
+  inline static std::recursive_mutex sOutputMutex;
   inline static std::thread *sTransmitterThread;
   
   AppInterfaceStd() = delete;
@@ -161,10 +162,14 @@ public:
     std::this_thread::sleep_for(std::chrono::milliseconds(tTaskShutdownPollPeriod));
   }
 
-  static void lock() noexcept { // Now don't care.
+  /// Direct mode holds this from the first item of a line to Log::end, so lines don't mix.
+  /// Recursive, because computing a logged value may log on the same thread.
+  static void lock() noexcept {
+    sOutputMutex.lock();
   }
 
-  static void unlock() noexcept { // Now don't care.
+  static void unlock() noexcept {
+    sOutputMutex.unlock();
   }
 
   static void atomicBufferSendBegin() noexcept {

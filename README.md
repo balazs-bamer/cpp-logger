@@ -74,7 +74,7 @@ The logger consists of six classes:
 - _Config_ - provides some configuration parameters.
 
 The logger can operate in two modes:
-- Direct without queue, when the conversion and sending happen without message instantiation and queue usage. This can be useful for single-threaded applications.
+- Direct without queue, when the conversion and sending happen without message instantiation and queue usage. This can be useful for single-threaded applications. Lines from different tasks don't mix: a line holds the _App interface_ lock from its first item until `Log::end`, so a line missing `Log::end` blocks direct logging in all other tasks.
 - With a queue, when each item is sent, it will form one or more (in case of stored strings) messages and use a central thread-safe queue. On the other end of the queue, a background thread pops the messages and groups them by tasks in secondary lists. When a group of related items from a task has arrived, its conversion and sending begin.
 
 ## Implementations

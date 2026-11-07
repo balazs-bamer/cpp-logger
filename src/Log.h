@@ -418,12 +418,14 @@ private:
   class LogShiftChainHelperDirectSend final {
     TaskId          mTaskId;
     LogFormat       mNextFormat;
+    bool            mLocked;   // tAppInterface::lock() is held from the first item to Log::end, so lines from tasks don't mix.
 
   public:
     LogShiftChainHelperDirectSend() noexcept = delete;
 
     LogShiftChainHelperDirectSend(TaskId const aTaskId) noexcept
-     : mTaskId(aTaskId) {
+     : mTaskId(aTaskId)
+     , mLocked(false) {
        mNextFormat.invalidate();
     }
 
@@ -465,15 +467,25 @@ private:
         ConversionResult buffer[csDirectBufferSize];
         tConverter converter(buffer, buffer + csDirectBufferSize);
         converter.terminateSequence();
-        tAppInterface::lock();
+        lockOnce();
         tSender::send(buffer, converter.end());
         tAppInterface::unlock();
+        mLocked = false;
       }
       else { // nothing to do
       }
     }
 
   private:
+    void lockOnce() noexcept {
+      if(!mLocked) {
+        tAppInterface::lock();
+        mLocked = true;
+      }
+      else { // nothing to do
+      }
+    }
+
     template<typename tValue>
     LogShiftChainHelperDirectSend& convertAndSend(tValue const aValue) {
       if(mTaskId != csInvalidTaskId) {
@@ -488,9 +500,8 @@ private:
         ConversionResult buffer[csDirectBufferSize];
         tConverter converter(buffer, buffer + csDirectBufferSize);
         converter.convert(aValue, format.mBase, format.mFill);
-        tAppInterface::lock();
+        lockOnce();
         tSender::send(buffer, converter.end());
-        tAppInterface::unlock();
       }
       else { // silently discard value, nothing to do
       }
@@ -724,7 +735,9 @@ public:
         tAtomicBuffer::scheduleForSend();
         tAppInterface::atomicBufferSendWait();
       } else {
+        tAppInterface::lock();   // Several sends, keep log lines out of them.
         doSendAtomicBuffer();
+        tAppInterface::unlock();
       }
       tAppInterface::atomicBufferSendEnd();
     }
