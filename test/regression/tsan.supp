@@ -1,0 +1,4 @@
+# boost::lockfree's freelist reads a node's next index without synchronisation, and the
+# compare-and-swap that follows discards the value if the node changed meanwhile. Benign by
+# design, but a data race to ThreadSanitizer, which then fails the boost queue tests at random.
+race:boost::lockfree::detail::
