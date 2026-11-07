@@ -20,17 +20,13 @@ public:
 private:
   class FreeRtosQueue final {
     boost::lockfree::queue<tMessage, boost::lockfree::capacity<tQueueSize>> mQueue;
-    std::atomic<bool>                mNotified;
+    bool                             mNotified = false;   // Guarded by mMutex.
     std::mutex                       mMutex;
-    std::unique_lock<std::mutex>     mLock;
     std::condition_variable          mConditionVariable;
 
   public:
     /// First implementation, we assume we have plenty of memory.
-    FreeRtosQueue() noexcept
-      : mLock(mMutex) {
-      mNotified = false;
-    }
+    FreeRtosQueue() noexcept = default;
 
     ~FreeRtosQueue() noexcept = default;
 
@@ -41,27 +37,29 @@ private:
     void push(tMessage const &aMessage) noexcept {
       bool success = mQueue.bounded_push(aMessage);
       if(success) {
-        mNotified = true;         // Having no lock_guard here makes tremendous speedup.
+        {
+          // Setting the flag under the mutex prevents a lost wakeup between the consumer's check and its wait.
+          std::lock_guard<std::mutex> lock(mMutex);
+          mNotified = true;
+        }
         mConditionVariable.notify_one();
       }
       else { // nothing to do
       }
     }
 
-    bool pop(tMessage &aMessage, LogTime const mPauseLength) noexcept {
-      bool result;
+    bool pop(tMessage &aMessage, LogTime const aPauseLength) noexcept {
       // Safe to call empty because there will be only one consumer.
-      if(mQueue.empty() &&
-        (!mConditionVariable.wait_for(mLock, std::chrono::milliseconds(mPauseLength), [this]{return mNotified == true;})
-        && !mNotified )) {  // This check makes the lock_guard on notifying unnecessary,
-        // because I don't care if I get in right during waiting or just at the beginning of next check.
-        result = false;
-      }
-      else {
+      if(mQueue.empty()) {
+        // The lock must be local: a mutex may only be unlocked by the thread owning it,
+        // and waiting unlocks it.
+        std::unique_lock<std::mutex> lock(mMutex);
+        mConditionVariable.wait_for(lock, std::chrono::milliseconds(aPauseLength), [this]{ return mNotified; });
         mNotified = false;
-        result = mQueue.pop(aMessage);
       }
-      return result;
+      else { // nothing to do
+      }
+      return mQueue.pop(aMessage);  // False on timeout, or on a stale flag from an already popped message.
     }
   };
 

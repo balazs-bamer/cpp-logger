@@ -40,20 +40,20 @@ public:
   };
 
 private:
+  /// Binary semaphore: a notify() arriving before wait() is kept, not lost.
   class Semaphore final {
   private:
-    std::atomic<bool>            mNotified = false;
-    std::mutex                   mMutex;
-    std::unique_lock<std::mutex> mLock;
-    std::condition_variable      mConditionVariable;
+    bool                    mNotified = false;   // Guarded by mMutex.
+    std::mutex              mMutex;
+    std::condition_variable mConditionVariable;
 
   public:
-    Semaphore() noexcept : mLock(mMutex) {
-    }
-
     void wait() noexcept {
+      // The lock must be local: a mutex may only be unlocked by the thread owning it,
+      // and waiting unlocks it.
+      std::unique_lock<std::mutex> lock(mMutex);
+      mConditionVariable.wait(lock, [this] { return mNotified; });
       mNotified = false;
-      mConditionVariable.wait(mLock, [this] { return mNotified == true; });
     }
 
     void notify() noexcept {
@@ -65,7 +65,8 @@ private:
     }
   };
 
-  inline static Semaphore sSemaphore;
+  inline static Semaphore sTransmitterFinished;
+  inline static Semaphore sAtomicBufferSent;
 
   inline static constexpr char csErrorMessages[static_cast<size_t>(Exception::cCount)][40] = {
     "cOutOfTaskIdsOrDoubleRegistration", "cOutOfTopics", "cSenderError"
@@ -139,11 +140,11 @@ public:
   }
 
   static void finish() noexcept {
-    sSemaphore.notify();
+    sTransmitterFinished.notify();
   }
 
   static void waitForFinished() noexcept {
-    sSemaphore.wait();
+    sTransmitterFinished.wait();
   }
 
   static void sleepWhileWaitingForTaskShutdown() noexcept {
@@ -157,11 +158,11 @@ public:
   }
 
   static void atomicBufferSendWait() noexcept {
-    sSemaphore.wait();
+    sAtomicBufferSent.wait();
   }
 
   static void atomicBufferSendFinished() noexcept {
-    sSemaphore.notify();
+    sAtomicBufferSent.notify();
   }
 
   static void error(Exception const aError) {
