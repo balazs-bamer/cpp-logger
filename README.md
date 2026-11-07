@@ -364,7 +364,7 @@ There are three possibilities to use log levels.
 
 #### Native log levels
 
-The `Log` class takes an optional template argument, the application log level. The `Log::n(...)` and `Log::i(...)` functions' overloads without operands and taking a `TaskId` (see below) are templated methods with a default value of `ErrorLevel::All`. By providing template values for these methods, the given instantiation chooses between a functional and an empty return value. As the empty one will be fully optimised out for unused log levels, this is more performant than the next one. The log system has these predefined log levels in `Log`:
+The `Config` class takes an optional last template argument, the application log level, with the default value `ErrorLevel::All`. The `Log::n(...)` and `Log::i(...)` functions' overloads without operands and taking a `TaskId` (see below) are templated methods with a default value of `ErrorLevel::Off`. A call logs when its level is not above the application log level. `ErrorLevel::Off` is the lowest, so a call without a level always logs, and the application log level `ErrorLevel::Off` keeps only those calls. By providing template values for these methods, the given instantiation chooses between a functional and an empty return value. As the empty one will be fully optimised out for unused log levels, this is more performant than the next one. The log system has these predefined log levels in `Log`:
 
 ```C++
 static constexpr ErrorLevel fatal = ErrorLevel::Fatal;
