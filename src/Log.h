@@ -187,6 +187,7 @@ private:
 
   inline static constexpr char csRegisteredTask[]    = "-=- Registered task:";
   inline static constexpr char csUnregisteredTask[]  = "-=- Unregistered task:";
+  inline static constexpr char csNullString[]        = "(null)";   // Logged instead of a nullptr string.
   
   inline static LogFormatConfig const                 *sConfig;
   inline static std::atomic<LogTopic>                  sNextFreeTopic;
@@ -274,8 +275,9 @@ private:
     }
 
   private:
-    LogShiftChainHelperBackgroundSend& sendCharPointer(char const * const aValue) noexcept {
+    LogShiftChainHelperBackgroundSend& sendCharPointer(char const * aValue) noexcept {
       if(mTaskId != csInvalidTaskId && mNextSequence < std::numeric_limits<MessageSequence>::max()) {
+        aValue = (aValue != nullptr) ? aValue : csNullString;
         LogFormat format = obtainFormat();
         tMessage message;
         if(format.isStoredString()) {
@@ -371,6 +373,14 @@ private:
       else { // silently discard value, nothing to do
       }
       return *this;
+    }
+
+    LogShiftChainHelperDirectSend& operator<<(char * const aValue) {
+      return operator<<(static_cast<char const *>(aValue));
+    }
+
+    LogShiftChainHelperDirectSend& operator<<(char const * const aValue) {
+      return operator<< <char const *>((aValue != nullptr) ? aValue : csNullString);
     }
 
     LogShiftChainHelperDirectSend& operator<<(LogFormat const aFormat) noexcept {
@@ -541,26 +551,26 @@ public:
   static void unregisterCurrentTask() noexcept {
     if constexpr(!csShutdownLog) {
       TaskId taskId = tAppInterface::getCurrentTaskId();
-      if constexpr(csAllowRegistrationLog) {
-        if(taskId != csInvalidTaskId) {
+      if(taskId != csInvalidTaskId) {   // Not registered: nothing to do, and taskId would index out of bounds.
+        if constexpr(csAllowRegistrationLog) {
           n(taskId) << csUnregisteredTask << taskId << end;
         }
         else { // nothing to do
         }
-      }
-      else { // nothing to do
-      }
-      if constexpr(csSendInBackground) {
-        tMessage message;
-        message.setShutdown(taskId);
-        tQueue::push(message);
-        while(!(*sTaskShutdowns)[taskId]) {
-          tAppInterface::sleepWhileWaitingForTaskShutdown();
+        if constexpr(csSendInBackground) {
+          tMessage message;
+          message.setShutdown(taskId);
+          tQueue::push(message);
+          while(!(*sTaskShutdowns)[taskId]) {
+            tAppInterface::sleepWhileWaitingForTaskShutdown();
+          }
         }
+        else { // nothing to do
+        }
+        tAppInterface::unregisterCurrentTask();
       }
       else { // nothing to do
       }
-      tAppInterface::unregisterCurrentTask();
     }
     else { // nothing to do
     }

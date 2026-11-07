@@ -102,17 +102,15 @@ public:
   static TaskId registerCurrentTask(char const * const) {
     xSemaphoreTake(sRegistrationMutex, csRegistrationMutexTimeout);
     TaskId result;
-    if(sPreviousTaskId < csMaxTaskCount){
-      TaskHandle_t taskHandle = xTaskGetCurrentTaskHandle();
-      auto end = sTaskHandles.begin() + sPreviousTaskId;
-      auto found = std::find(sTaskHandles.begin(), end, taskHandle);
-      if(found != end) {
-        result = found - sTaskHandles.begin() + csFirstNormalTaskId - csIsrTaskId;
-      }
-      else {
-        result = ++sPreviousTaskId;
-        *end = taskHandle;
-      }
+    TaskHandle_t taskHandle = xTaskGetCurrentTaskHandle();
+    auto end = sTaskHandles.begin() + sPreviousTaskId;
+    auto found = std::find(sTaskHandles.begin(), end, taskHandle);
+    if(found != end) {   // Already registered, even when the table is full.
+      result = found - sTaskHandles.begin() + csFirstNormalTaskId - csIsrTaskId;
+    }
+    else if(sPreviousTaskId < csMaxTaskCount) {
+      result = ++sPreviousTaskId;
+      *end = taskHandle;
     }
     else {
       result = csInvalidTaskId;

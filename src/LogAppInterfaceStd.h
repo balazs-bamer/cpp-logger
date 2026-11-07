@@ -112,22 +112,31 @@ public:
   static TaskId registerCurrentTask(char const * const aTaskName) {
     std::lock_guard<std::mutex> lock (sRegistrationMutex);
     TaskId result;
-    auto it = std::find(sFreeTaskIds.begin() + csFirstNormalTaskId, sFreeTaskIds.end(), true);
-    if(it != sFreeTaskIds.end()) {
-      shTaskId = result = static_cast<TaskId>(it - sFreeTaskIds.begin());
-      shTaskName = (aTaskName != nullptr) ? aTaskName : csUnknownTaskName;
-      *it = false;
+    if(shTaskId != csInvalidTaskId) {   // Already registered, keep the ID and the name.
+      result = shTaskId;
     }
     else {
-      result = csInvalidTaskId;
+      auto it = std::find(sFreeTaskIds.begin() + csFirstNormalTaskId, sFreeTaskIds.end(), true);
+      if(it != sFreeTaskIds.end()) {
+        shTaskId = result = static_cast<TaskId>(it - sFreeTaskIds.begin());
+        shTaskName = (aTaskName != nullptr) ? aTaskName : csUnknownTaskName;
+        *it = false;
+      }
+      else {
+        result = csInvalidTaskId;
+      }
     }
     return result;
   }
 
   static TaskId unregisterCurrentTask() {
     std::lock_guard<std::mutex> lock (sRegistrationMutex);
-    sFreeTaskIds[shTaskId] = true;
-    shTaskId = csInvalidTaskId;
+    if(shTaskId != csInvalidTaskId) {
+      sFreeTaskIds[shTaskId] = true;
+      shTaskId = csInvalidTaskId;
+    }
+    else { // nothing to do
+    }
     return csInvalidTaskId;
   }
 
