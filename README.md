@@ -452,4 +452,4 @@ Of course, this is only effective if the logging is on and the `AtomicBufferOper
 Log::sendAtomicBuffer();
 ```
 
-which is a blocking call. Note that in multithreaded mode, sending from all other tasks will not occur; only the queues will hold messages from concurrent logging as long as possible.
+which is a blocking call. Concurrent calls are serialized, each caller waits for its own complete send. Note that in multithreaded mode, sending from all other tasks will not occur; only the queues will hold messages from concurrent logging as long as possible.

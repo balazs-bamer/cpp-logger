@@ -1,5 +1,5 @@
-#ifndef LOG_QUEUE_STD_BOOST
-#define LOG_QUEUE_STD_BOOST
+#ifndef NOWTECH_LOG_QUEUE_STD_CIRCULAR
+#define NOWTECH_LOG_QUEUE_STD_CIRCULAR
 
 #include <array>
 #include <cstddef>

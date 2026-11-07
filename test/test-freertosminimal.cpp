@@ -40,6 +40,7 @@ namespace nowtech::LogTopics {
 }
 
 constexpr nowtech::log::TaskId cgMaxTaskCount = 1u;
+constexpr bool cgAllowRegistrationLog = true;
 constexpr bool cgLogFromIsr = false;
 constexpr size_t cgTaskShutdownSleepPeriod = 100u;
 constexpr bool cgArchitecture64 = false;
@@ -53,6 +54,7 @@ constexpr size_t cgQueueSize = 111u;
 constexpr nowtech::log::LogTopic cgMaxTopicCount = 2;
 constexpr nowtech::log::TaskRepresentation cgTaskRepresentation = nowtech::log::TaskRepresentation::cName;
 constexpr size_t cgDirectBufferSize = 0u;
+constexpr nowtech::log::ErrorLevel cgErrorLevel = nowtech::log::ErrorLevel::Error;
 constexpr uint32_t cgLogTaskStackSize = 256u;
 constexpr uint32_t cgLogTaskPriority = tskIDLE_PRIORITY + 1u;
 
@@ -62,8 +64,10 @@ constexpr typename LogAppInterfaceFreeRtosMinimal::LogTime cgRefreshPeriod = 444
 using LogMessage = nowtech::log::MessageVariant<cgPayloadSize, cgSupportFloatingPoint>;
 using LogConverterCustomText = nowtech::log::ConverterCustomText<LogMessage, cgArchitecture64, cgAppendStackBufferSize, cgAppendBasePrefix, cgAlignSigned>;
 using LogSenderStmHalMinimal = nowtech::log::SenderStmHalMinimal<LogAppInterfaceFreeRtosMinimal, LogConverterCustomText, cgTransmitBufferSize, cgTimeout>;
-using LogQueueVoid = nowtech::log::QueueFreeRtos<LogMessage, LogAppInterfaceFreeRtosMinimal, cgQueueSize>;
-using Log = nowtech::log::Log<LogQueueVoid, LogSenderStmHalMinimal, cgMaxTopicCount, cgTaskRepresentation, cgDirectBufferSize, cgRefreshPeriod>;
+using LogQueueFreeRtos = nowtech::log::QueueFreeRtos<LogMessage, LogAppInterfaceFreeRtosMinimal, cgQueueSize>;
+using LogAtomicBuffer = nowtech::log::AtomicBufferVoid;
+using LogConfig = nowtech::log::Config<cgAllowRegistrationLog, cgMaxTopicCount, cgTaskRepresentation, cgDirectBufferSize, cgRefreshPeriod, cgErrorLevel>;
+using Log = nowtech::log::Log<LogQueueFreeRtos, LogSenderStmHalMinimal, LogAtomicBuffer, LogConfig>;
  
 void step() {
   HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
@@ -71,8 +75,7 @@ void step() {
 }
 
 extern "C" void myDefaultTask() {
-  nowtech::log::LogConfig logConfig;
-  logConfig.allowRegistrationLog = true;
+  nowtech::log::LogFormatConfig logConfig;
   LogSenderStmHalMinimal::init(&huart1);
   Log::init(logConfig, cgLogTaskStackSize, cgLogTaskPriority);
 
