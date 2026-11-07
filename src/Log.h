@@ -594,12 +594,15 @@ public:
 
   static void sendAtomicBuffer() noexcept {
     if constexpr(!csShutdownLog && csAtomicBufferOperational) {
+      // One caller at a time: there is a single request flag, and in direct mode a single sender buffer.
+      tAppInterface::atomicBufferSendBegin();
       if constexpr(csSendInBackground) {
         tAtomicBuffer::scheduleForSend();
         tAppInterface::atomicBufferSendWait();
       } else {
         doSendAtomicBuffer();
       }
+      tAppInterface::atomicBufferSendEnd();
     }
     else { // nothing to do
     }
@@ -764,8 +767,9 @@ private:
         if constexpr(csAtomicBufferOperational) {
           if(tAtomicBuffer::isScheduledForSent()) {
             doSendAtomicBuffer();
-            tAppInterface::atomicBufferSendFinished();
+            // Clear the request before waking the caller, otherwise its next request could be cleared here.
             tAtomicBuffer::sendFinished();
+            tAppInterface::atomicBufferSendFinished();
           }
           else { // nothing to do
           }

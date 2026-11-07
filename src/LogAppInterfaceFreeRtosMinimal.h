@@ -54,6 +54,7 @@ private:
   inline static std::array<TaskHandle_t, csMaxTaskCount> sTaskHandles;
   inline static TaskId sPreviousTaskId = csFirstNormalTaskId - 1u;
   inline static SemaphoreHandle_t sRegistrationMutex;
+  inline static SemaphoreHandle_t sAtomicBufferSendMutex;
   inline static std::atomic<TaskHandle_t> sTaskToNotify;
   inline static TaskHandle_t sTransmitterTask;
 
@@ -62,6 +63,7 @@ private:
 public:
   static void init() {
     sRegistrationMutex = xSemaphoreCreateMutex();
+    sAtomicBufferSendMutex = xSemaphoreCreateMutex();
   }
 
   static void init(void (*aFunction)(), uint32_t const aStackDepth, uint32_t const aPriority) {
@@ -162,9 +164,18 @@ public:
   static void unlock() noexcept { // Now don't care.
   }
 
-  static void atomicBufferSendWait() noexcept {
+  static void atomicBufferSendBegin() noexcept {
+    xSemaphoreTake(sAtomicBufferSendMutex, csAtomicSendTimeout);
+    // Set before the request is scheduled, so the transmitter never notifies a stale task.
     sTaskToNotify = xTaskGetCurrentTaskHandle();
+  }
+
+  static void atomicBufferSendWait() noexcept {
     ulTaskNotifyTake(pdTRUE, csAtomicSendTimeout);
+  }
+
+  static void atomicBufferSendEnd() noexcept {
+    xSemaphoreGive(sAtomicBufferSendMutex);
   }
 
   static void atomicBufferSendFinished() noexcept {

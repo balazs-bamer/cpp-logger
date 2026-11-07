@@ -67,6 +67,7 @@ private:
 
   inline static Semaphore sTransmitterFinished;
   inline static Semaphore sAtomicBufferSent;
+  inline static std::mutex sAtomicBufferSendMutex;
 
   inline static constexpr char csErrorMessages[static_cast<size_t>(Exception::cCount)][40] = {
     "cOutOfTaskIdsOrDoubleRegistration", "cOutOfTopics", "cSenderError"
@@ -157,8 +158,16 @@ public:
   static void unlock() noexcept { // Now don't care.
   }
 
+  static void atomicBufferSendBegin() noexcept {
+    sAtomicBufferSendMutex.lock();
+  }
+
   static void atomicBufferSendWait() noexcept {
     sAtomicBufferSent.wait();
+  }
+
+  static void atomicBufferSendEnd() noexcept {
+    sAtomicBufferSendMutex.unlock();
   }
 
   static void atomicBufferSendFinished() noexcept {
