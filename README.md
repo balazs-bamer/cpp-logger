@@ -435,7 +435,7 @@ A group also ends when its helper is destroyed, so `Log::end` is optional:
 - Helpers are move-only, moving one hands the group over. `auto logger = Log::n() << "x";` moves the temporary into `logger`.
 - Always use `auto` for a named helper. `auto&` on a chain result doesn't compile, and `auto&& logger = Log::n() << "x";` compiles but refers to the temporary, which ends its group and dies at the end of the statement.
 - Several temporary helpers in one statement end in reverse order at its end, for example `Log::n() << a << Log::end, Log::n() << b;` logs the line of `b` first.
-- Don't start another group in the same task while a named helper is open. In queued mode the two groups corrupt each other, and in direct mode the open helper holds the output lock.
+- Don't start another group in the same task while a named helper is open. In queued mode the two groups corrupt each other, and in direct mode the open helper holds the output lock. Unless `NDEBUG` is defined, a debug check reports this to the _App interface_'s `error()` as `Exception::cOverlappingGroups`. The STL _App interface_ counts it, the FreeRTOS one stops in its debug trap. Define `NOWTECH_LOG_CHECK_GROUPS` as 0 or 1 to choose, with the same value in every translation unit. Groups logged from interrupts aren't checked, since interrupts share a task ID.
 
 I've implemented a function call-like entry point using C++17 folding expressions. To be honest, this is just a _why not_ solution, and not an integral part of the API. It gets called like
 

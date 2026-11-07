@@ -12,13 +12,25 @@
 #include <array>
 #include <utility>
 
+/// Debug check for a task opening a log group while another one of it is still open, which corrupts both in
+/// queued mode. It reports Exception::cOverlappingGroups to tAppInterface::error. On unless NDEBUG is defined,
+/// define it as 0 or 1 to choose, with the same value in every translation unit.
+#ifndef NOWTECH_LOG_CHECK_GROUPS
+#ifdef NDEBUG
+#define NOWTECH_LOG_CHECK_GROUPS 0
+#else
+#define NOWTECH_LOG_CHECK_GROUPS 1
+#endif
+#endif
+
 namespace nowtech::log {
   
 enum class Exception : uint8_t {
   cOutOfTaskIdsOrDoubleRegistration = 0u,
   cOutOfTopics                      = 1u,
   cSenderError                      = 2u,
-  cCount                            = 3u
+  cOverlappingGroups                = 3u,   // A task opened a log group while another one of it was open, see NOWTECH_LOG_CHECK_GROUPS.
+  cCount                            = 4u
 };
 
 enum class TaskRepresentation : uint8_t {
@@ -159,6 +171,7 @@ private:
   static constexpr TaskId   csMaxTotalTaskCount        = tAppInterface::csMaxTaskCount + 1u;
   static constexpr size_t   csListItemOverhead         = sizeof(void*) * 8u;
   static constexpr bool     csConstantTaskNames        = tAppInterface::csConstantTaskNames;
+  static constexpr bool     csCheckGroups              = NOWTECH_LOG_CHECK_GROUPS != 0;
   static constexpr bool     csAllowRegistrationLog     = tLogConfig::csAllowRegistrationLog;
 
   static constexpr ErrorLevel         csErrorLevel          = tLogConfig::csErrorLevel;
@@ -202,7 +215,46 @@ private:
   inline static Allocator         *sAllocator;
   inline static MessageQueueArray *sMessageQueues;
 
+  // Open groups per task for the debug check, only touched by the task itself. Nothing when the check is off.
+  inline static std::array<uint8_t, csCheckGroups ? csMaxTotalTaskCount : 0u> sOpenGroups;
+
   Log() = delete;
+
+  /// Interrupts share a task ID, so their groups may overlap legitimately and are not checked.
+  static constexpr bool isCheckedTask(TaskId const aTaskId) noexcept {
+    return aTaskId != csIsrTaskId && aTaskId < csMaxTotalTaskCount;
+  }
+
+  /// Debug check, see NOWTECH_LOG_CHECK_GROUPS. Called by a chain helper that starts owning a group.
+  static void openGroup(TaskId const aTaskId) noexcept {
+    if constexpr(csCheckGroups) {
+      if(isCheckedTask(aTaskId)) {
+        if(sOpenGroups[aTaskId] > 0u) {
+          tAppInterface::error(Exception::cOverlappingGroups);
+        }
+        else { // nothing to do
+        }
+        ++sOpenGroups[aTaskId];
+      }
+      else { // nothing to do
+      }
+    }
+    else { // nothing to do
+    }
+  }
+
+  /// Called when the group ends.
+  static void closeGroup(TaskId const aTaskId) noexcept {
+    if constexpr(csCheckGroups) {
+      if(isCheckedTask(aTaskId) && sOpenGroups[aTaskId] > 0u) {   // Registration may have reset it meanwhile.
+        --sOpenGroups[aTaskId];
+      }
+      else { // nothing to do
+      }
+    }
+    else { // nothing to do
+    }
+  }
 
   template<typename tType>
   struct TypeTag final {
@@ -303,6 +355,7 @@ private:
      , mNextSequence(0u)
      , mWasMessage(false) {
       mNextFormat.invalidate();
+      openGroup(mTaskId);
     }
 
     LogShiftChainHelperBackgroundSend(LogShiftChainHelperBackgroundSend const &) = delete;
@@ -389,6 +442,7 @@ private:
         else { // nothing to do
         }
         tQueue::push(mFirstMessage);
+        closeGroup(mTaskId);
         mTaskId = csInvalidTaskId;   // Ended, the destructor has nothing left to do.
       }
       else { // nothing to do
@@ -469,6 +523,7 @@ private:
      : mTaskId(aTaskId)
      , mLocked(false) {
        mNextFormat.invalidate();
+       openGroup(mTaskId);
     }
 
     LogShiftChainHelperDirectSend(LogShiftChainHelperDirectSend const &) = delete;
@@ -547,6 +602,7 @@ private:
         tSender::send(buffer, converter.end());
         tAppInterface::unlock();
         mLocked = false;
+        closeGroup(mTaskId);
         mTaskId = csInvalidTaskId;   // Ended, the destructor has nothing left to do.
       }
       else { // nothing to do
@@ -734,6 +790,15 @@ public:
       if(taskId != csInvalidTaskId) {
         if constexpr(csSendInBackground) {
           (*sTaskShutdowns)[taskId] = false;
+        }
+        else { // nothing to do
+        }
+        if constexpr(csCheckGroups) {   // A task reusing the ID of one that ended with an open group starts clean.
+          if(isCheckedTask(taskId)) {
+            sOpenGroups[taskId] = 0u;
+          }
+          else { // nothing to do
+          }
         }
         else { // nothing to do
         }

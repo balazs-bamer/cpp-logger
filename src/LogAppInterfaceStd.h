@@ -70,7 +70,7 @@ private:
   inline static std::mutex sAtomicBufferSendMutex;
 
   inline static constexpr char csErrorMessages[static_cast<size_t>(Exception::cCount)][40] = {
-    "cOutOfTaskIdsOrDoubleRegistration", "cOutOfTopics", "cSenderError"
+    "cOutOfTaskIdsOrDoubleRegistration", "cOutOfTopics", "cSenderError", "cOverlappingGroups"
   };
   inline static constexpr char   csError[]            = "Error: ";
   inline static constexpr char   csFatalError[]       = "Fatal: ";

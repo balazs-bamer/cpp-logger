@@ -92,6 +92,7 @@ int main() {
     "-=- Unregistered task: 1 \n";
 #endif
   CHECK(gOutput.str() == expected);
+  CHECK(LogAppInterface::getErrorCount(nowtech::log::Exception::cOverlappingGroups) == 0u);   // None of these patterns overlap.
   if(gOutput.str() != expected) {
     std::fprintf(stderr, "output:\n%s---\nexpected:\n%s---\n", gOutput.str().c_str(), expected.c_str());
   }

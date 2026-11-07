@@ -68,5 +68,6 @@ int main() {
   CHECK(missing == 0u);
   CHECK(repeated == 0u);
   CHECK(other == 0u);
+  CHECK(LogAppInterface::getErrorCount(nowtech::log::Exception::cOverlappingGroups) == 0u);   // Groups of different tasks don't overlap.
   return finish();
 }
