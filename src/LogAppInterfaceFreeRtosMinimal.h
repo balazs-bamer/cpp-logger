@@ -180,7 +180,7 @@ public:
     xTaskNotifyGive(sTaskToNotify);
   }
 
-  static void error(Exception const aError) {
+  static void error(Exception const aError) noexcept {   // Debug trap. Must not throw, senders call it from noexcept code.
 	  while(true) {
 	  }
   }

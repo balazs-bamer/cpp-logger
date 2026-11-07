@@ -184,6 +184,8 @@ private:
   static_assert(std::is_same_v<tMessage, typename tConverter::tMessage_>);
   static_assert(std::is_integral_v<tAtomicBufferType>);
   static_assert(csAtomicBufferSizeExponent <= csMaxAtomicBufferSizeExp);
+  static_assert(noexcept(tSender::send(static_cast<char const *>(nullptr), static_cast<char const *>(nullptr))),
+                "Senders must not throw, send() runs in noexcept code like the transmitter. Report errors to tAppInterface::error().");
 
   inline static constexpr char csRegisteredTask[]    = "-=- Registered task:";
   inline static constexpr char csUnregisteredTask[]  = "-=- Unregistered task:";
@@ -435,7 +437,7 @@ private:
     }
 
     template<typename tValue>
-    LogShiftChainHelperDirectSend& operator<<(tValue const aValue) {
+    LogShiftChainHelperDirectSend& operator<<(tValue const aValue) noexcept {
       checkLoggable<tValue>();
       if constexpr(isLoggable<tValue>()) {
         return convertAndSend(static_cast<LoggedType<tValue>>(aValue));
@@ -445,15 +447,15 @@ private:
       }
     }
 
-    LogShiftChainHelperDirectSend& operator<<(char * const aValue) {
+    LogShiftChainHelperDirectSend& operator<<(char * const aValue) noexcept {
       return operator<<(static_cast<char const *>(aValue));
     }
 
-    LogShiftChainHelperDirectSend& operator<<(char const * const aValue) {
+    LogShiftChainHelperDirectSend& operator<<(char const * const aValue) noexcept {
       return convertAndSend((aValue != nullptr) ? aValue : csNullString);
     }
 
-    LogShiftChainHelperDirectSend& operator<<(std::string const &aValue) {   // Converted right away, no need to copy.
+    LogShiftChainHelperDirectSend& operator<<(std::string const &aValue) noexcept {   // Converted right away, no need to copy.
       return operator<<(aValue.c_str());
     }
 
@@ -487,7 +489,7 @@ private:
     }
 
     template<typename tValue>
-    LogShiftChainHelperDirectSend& convertAndSend(tValue const aValue) {
+    LogShiftChainHelperDirectSend& convertAndSend(tValue const aValue) noexcept {
       if(mTaskId != csInvalidTaskId) {
         LogFormat format;
         if(mNextFormat.isValid()) {

@@ -58,7 +58,7 @@ The logger consists of six classes:
 - `Log` - the main class providing API and base architecture. This accepts the other ones as template parameters.
 - _Queue_ - used to transfer the converting and sending operations from the current task to a background one.
 - _Converter_ - converts the user types to strings or any other binary format to be sent or stored.
-- _Sender_ - the class responsible for transmitting or storing the converted data.
+- _Sender_ - the class responsible for transmitting or storing the converted data. Its `send()` must be `noexcept` and report failures to the _App interface_'s `error()` instead. The STL _App interface_ counts them, see its `getErrorCount()`.
 - _App interface_ - used to interface the application, STL and OS. This provides
   - Possibly custom memory management needed by embedded applications.
   - Task management, including

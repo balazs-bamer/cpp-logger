@@ -40,7 +40,7 @@ public:
   static void done() noexcept {
   }
 
-  static void send(char const * const aBegin, char const * const aEnd) {
+  static void send(char const * const aBegin, char const * const aEnd) noexcept {
     if(sSerialDescriptor != nullptr) {
       HAL_UART_Transmit(sSerialDescriptor, reinterpret_cast<uint8_t*>(const_cast<char*>(aBegin)), aEnd - aBegin, tTimeout);
     }

@@ -44,11 +44,15 @@ add_regression_test(types-variant types.cpp LOG_TEST_MESSAGE_VARIANT)
 add_regression_test(types-direct types.cpp LOG_TEST_DIRECT)
 add_regression_test(types-shutdown types.cpp LOG_TEST_SHUTDOWN)
 add_regression_test(direct-threads direct-threads.cpp LOG_TEST_DIRECT)
+add_regression_test(sender-errors-background sender-errors.cpp)
+add_regression_test(sender-errors-background-exceptions sender-errors.cpp LOG_TEST_STREAM_EXCEPTIONS)
+add_regression_test(sender-errors-direct sender-errors.cpp LOG_TEST_DIRECT)
+add_regression_test(sender-errors-direct-exceptions sender-errors.cpp LOG_TEST_DIRECT LOG_TEST_STREAM_EXCEPTIONS)
 
-# Values the logger can't handle must not compile. Each test builds a target that logs one, and
-# passes when the build fails with the given part of the logger's static_assert message.
-function(add_compile_fail_test aName aExpectedMessage)
-  add_executable(${aName} EXCLUDE_FROM_ALL unsupported-type.cpp)
+# Code the logger must reject. Each test builds a target from the source, and passes when the build
+# fails with the given part of the logger's static_assert message.
+function(add_compile_fail_test aName aSource aExpectedMessage)
+  add_executable(${aName} EXCLUDE_FROM_ALL ${aSource})
   target_compile_definitions(${aName} PRIVATE ${ARGN})
   target_link_libraries(${aName} PRIVATE Threads::Threads)
   add_test(NAME ${aName} COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target ${aName})
@@ -57,17 +61,18 @@ function(add_compile_fail_test aName aExpectedMessage)
     RESOURCE_LOCK build-tree)   # Parallel builds in one tree can step on each other.
 endfunction()
 
-add_compile_fail_test(unsupported-pointer-background "can't be logged" LOG_TEST_UNSUPPORTED_POINTER)
-add_compile_fail_test(unsupported-pointer-direct "can't be logged" LOG_TEST_UNSUPPORTED_POINTER LOG_TEST_DIRECT)
-add_compile_fail_test(unsupported-pointer-shutdown "can't be logged" LOG_TEST_UNSUPPORTED_POINTER LOG_TEST_SHUTDOWN)
-add_compile_fail_test(unsupported-pointer-filtered "can't be logged" LOG_TEST_UNSUPPORTED_FILTERED_POINTER)
-add_compile_fail_test(unsupported-wide-char "can't be logged" LOG_TEST_UNSUPPORTED_WIDE_CHAR LOG_TEST_DIRECT)
-add_compile_fail_test(unsupported-string-view "can't be logged" LOG_TEST_UNSUPPORTED_STRING_VIEW)
-add_compile_fail_test(unsupported-float-background "Floating point logging is turned off" LOG_TEST_UNSUPPORTED_FLOAT LOG_TEST_NO_FLOAT)
-add_compile_fail_test(unsupported-float-direct "Floating point logging is turned off" LOG_TEST_UNSUPPORTED_FLOAT LOG_TEST_NO_FLOAT LOG_TEST_DIRECT)
+add_compile_fail_test(unsupported-pointer-background unsupported-type.cpp "can't be logged" LOG_TEST_UNSUPPORTED_POINTER)
+add_compile_fail_test(unsupported-pointer-direct unsupported-type.cpp "can't be logged" LOG_TEST_UNSUPPORTED_POINTER LOG_TEST_DIRECT)
+add_compile_fail_test(unsupported-pointer-shutdown unsupported-type.cpp "can't be logged" LOG_TEST_UNSUPPORTED_POINTER LOG_TEST_SHUTDOWN)
+add_compile_fail_test(unsupported-pointer-filtered unsupported-type.cpp "can't be logged" LOG_TEST_UNSUPPORTED_FILTERED_POINTER)
+add_compile_fail_test(unsupported-wide-char unsupported-type.cpp "can't be logged" LOG_TEST_UNSUPPORTED_WIDE_CHAR LOG_TEST_DIRECT)
+add_compile_fail_test(unsupported-string-view unsupported-type.cpp "can't be logged" LOG_TEST_UNSUPPORTED_STRING_VIEW)
+add_compile_fail_test(unsupported-float-background unsupported-type.cpp "Floating point logging is turned off" LOG_TEST_UNSUPPORTED_FLOAT LOG_TEST_NO_FLOAT)
+add_compile_fail_test(unsupported-float-direct unsupported-type.cpp "Floating point logging is turned off" LOG_TEST_UNSUPPORTED_FLOAT LOG_TEST_NO_FLOAT LOG_TEST_DIRECT)
 if(CPP_LOGGER_LONG_DOUBLE_SIZE GREATER 8)   # Longer than the 8 byte test payload.
-  add_compile_fail_test(unsupported-long-double-background "doesn't fit the message payload" LOG_TEST_UNSUPPORTED_LONG_DOUBLE)
+  add_compile_fail_test(unsupported-long-double-background unsupported-type.cpp "doesn't fit the message payload" LOG_TEST_UNSUPPORTED_LONG_DOUBLE)
 endif()
+add_compile_fail_test(throwing-sender throwing-sender.cpp "Senders must not throw")
 
 # FreeRTOS parts, against the declaration-only headers in freertos-stub.
 add_regression_test(freertos-registration freertos-registration.cpp)

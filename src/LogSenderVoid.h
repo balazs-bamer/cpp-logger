@@ -26,7 +26,7 @@ public:
   static void done() noexcept { // nothing to do
   }
 
-  static void send(char const * const, char const * const) { // nothing to do
+  static void send(char const * const, char const * const) noexcept { // nothing to do
   }
 
   static auto getBuffer() {

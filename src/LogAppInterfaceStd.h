@@ -82,6 +82,7 @@ private:
   inline static std::array<bool, csMaxTaskCount + 1u> sFreeTaskIds;
   inline static std::mutex sRegistrationMutex;
   inline static std::recursive_mutex sOutputMutex;
+  inline static std::array<std::atomic<uint32_t>, static_cast<size_t>(Exception::cCount)> sErrorCounts;
   inline static std::thread *sTransmitterThread;
   
   AppInterfaceStd() = delete;
@@ -188,8 +189,14 @@ public:
     sAtomicBufferSent.notify();
   }
 
-  static void error(Exception const aError) {
-    throw std::ios_base::failure(csErrorMessages[static_cast<size_t>(aError)]);
+  /// Counts instead of throwing: senders call it from noexcept code like the transmitter.
+  static void error(Exception const aError) noexcept {
+    ++sErrorCounts[static_cast<size_t>(aError)];
+  }
+
+  /// How many times error() was called with aError, for example cSenderError for failed writes.
+  static uint32_t getErrorCount(Exception const aError) noexcept {
+    return sErrorCounts[static_cast<size_t>(aError)];
   }
 
   static void fatalError(Exception const aError) {

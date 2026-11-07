@@ -42,7 +42,7 @@ public:
     tAppInterface::template _deleteArray<ConversionResult>(sTransmitBuffer);
   }
 
-  static void send(char const * const aBegin, char const * const aEnd) {
+  static void send(char const * const aBegin, char const * const aEnd) noexcept {
     try {
       std::string buffer{aBegin, static_cast<size_t>(aEnd - aBegin)};
       if(aBegin < aEnd && aEnd[-1] == csNewline) {

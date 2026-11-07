@@ -37,10 +37,17 @@ public:
     tAppInterface::template _deleteArray<ConversionResult>(sTransmitBuffer);
   }
 
-  static void send(char const * const aBegin, char const * const aEnd) {
+  /// Must not throw, it runs in noexcept code like the transmitter. Reports a failed write, also when
+  /// the stream has exceptions turned off, to tAppInterface::error.
+  static void send(char const * const aBegin, char const * const aEnd) noexcept {
     try {
       if(sStream != nullptr) {
         sStream->write(aBegin, aEnd - aBegin);
+        if(!*sStream) {
+          tAppInterface::error(Exception::cSenderError);
+        }
+        else { // nothing to do
+        }
       }
       else { // nothing to do
       }
