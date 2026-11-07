@@ -32,6 +32,10 @@ add_regression_test(registration-direct registration.cpp LOG_TEST_DIRECT)
 add_regression_test(null-strings-compact null-strings.cpp)
 add_regression_test(null-strings-variant null-strings.cpp LOG_TEST_MESSAGE_VARIANT)
 add_regression_test(null-strings-direct null-strings.cpp LOG_TEST_DIRECT)
+add_regression_test(std-string-compact std-string.cpp)
+add_regression_test(std-string-variant std-string.cpp LOG_TEST_MESSAGE_VARIANT)
+add_regression_test(std-string-direct std-string.cpp LOG_TEST_DIRECT)
+add_regression_test(std-string-shutdown std-string.cpp LOG_TEST_SHUTDOWN)
 
 # FreeRTOS parts, against the declaration-only headers in freertos-stub.
 add_regression_test(freertos-registration freertos-registration.cpp)

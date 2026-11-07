@@ -6,12 +6,17 @@
 //   LOG_TEST_QUEUE_BOOST      background mode with QueueStdBoost
 //   LOG_TEST_MESSAGE_VARIANT  MessageVariant instead of MessageCompact
 //   LOG_TEST_MAX_TASKS        number of task IDs, default 2 (main and one more)
+//   LOG_TEST_SHUTDOWN         SenderVoid, which compiles all logging out
 // Everything logged ends up in gOutput.
 
 #include "TestCheck.h"
 #include "LogAppInterfaceStd.h"
 #include "LogConverterCustomText.h"
+#ifdef LOG_TEST_SHUTDOWN
+#include "LogSenderVoid.h"
+#else
 #include "LogSenderStdOstream.h"
+#endif
 #if defined(LOG_TEST_DIRECT)
 #include "LogQueueVoid.h"
 #elif defined(LOG_TEST_QUEUE_BOOST)
@@ -53,7 +58,11 @@ using LogMessage = nowtech::log::MessageVariant<8u, true>;
 using LogMessage = nowtech::log::MessageCompact<8u, true>;
 #endif
 using LogConverter = nowtech::log::ConverterCustomText<LogMessage, true, 100u, true, false>;
+#ifdef LOG_TEST_SHUTDOWN
+using LogSender = nowtech::log::SenderVoid<LogAppInterface, LogConverter, 123u, 123u>;
+#else
 using LogSender = nowtech::log::SenderStdOstream<LogAppInterface, LogConverter, 123u, 123u>;
+#endif
 #if defined(LOG_TEST_DIRECT)
 using LogQueue = nowtech::log::QueueVoid<LogMessage, LogAppInterface>;
 #elif defined(LOG_TEST_QUEUE_BOOST)
@@ -69,7 +78,11 @@ inline std::ostringstream gOutput;
 inline nowtech::log::LogFormatConfig gLogFormatConfig;
 
 inline void initLog() {
+#ifdef LOG_TEST_SHUTDOWN
+  LogSender::init();
+#else
   LogSender::init(&gOutput);
+#endif
   Log::init(gLogFormatConfig);
 }
 

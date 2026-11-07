@@ -383,6 +383,10 @@ private:
       return operator<< <char const *>((aValue != nullptr) ? aValue : csNullString);
     }
 
+    LogShiftChainHelperDirectSend& operator<<(std::string const &aValue) {   // Converted right away, no need to copy.
+      return operator<<(aValue.c_str());
+    }
+
     LogShiftChainHelperDirectSend& operator<<(LogFormat const aFormat) noexcept {
       mNextFormat = aFormat;
       return *this;

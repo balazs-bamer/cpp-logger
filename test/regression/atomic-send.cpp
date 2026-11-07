@@ -13,7 +13,11 @@
 #include <vector>
 
 constexpr uint32_t cgThreadCount = 4u;
-constexpr uint32_t cgSendsPerThread = 50u;
+#ifdef LOG_TEST_DIRECT
+constexpr uint32_t cgSendsPerThread = 1000u;   // Quick, so many are needed to keep the threads overlapping on a loaded machine.
+#else
+constexpr uint32_t cgSendsPerThread = 50u;     // Each waits for the transmitter to be idle, up to cgRefreshPeriod.
+#endif
 constexpr uint32_t cgBackToBackSends = 100u;
 
 int main() {
@@ -22,14 +26,17 @@ int main() {
     Log::pushAtomic(i);
   }
 
+  StartGate gate;
   std::vector<std::thread> threads;
   for(uint32_t thread = 0u; thread < cgThreadCount; ++thread) {
-    threads.emplace_back([]{
+    threads.emplace_back([&gate]{
+      gate.wait();
       for(uint32_t i = 0u; i < cgSendsPerThread; ++i) {
         Log::sendAtomicBuffer();
       }
     });
   }
+  gate.open();
   for(auto &thread : threads) {
     thread.join();
   }

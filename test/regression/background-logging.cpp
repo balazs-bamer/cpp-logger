@@ -19,16 +19,19 @@ char const * const cgThreadNames[cgThreadCount] = {"t0", "t1", "t2", "t3"};
 int main() {
   initLog();
   Log::registerCurrentTask("main");
+  StartGate gate;
   std::vector<std::thread> threads;
   for(uint32_t thread = 0u; thread < cgThreadCount; ++thread) {
-    threads.emplace_back([thread]{
+    threads.emplace_back([thread, &gate]{
       Log::registerCurrentTask(cgThreadNames[thread]);
+      gate.wait();
       for(uint32_t i = 0u; i < cgLinesPerThread; ++i) {
         Log::n() << "line" << thread << i << Log::end;
       }
       Log::unregisterCurrentTask();
     });
   }
+  gate.open();
   for(auto &thread : threads) {
     thread.join();
   }
