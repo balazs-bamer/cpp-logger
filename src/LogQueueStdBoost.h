@@ -1,5 +1,5 @@
-#ifndef LOG_QUEUE_STD_BOOST
-#define LOG_QUEUE_STD_BOOST
+#ifndef NOWTECH_LOG_QUEUE_STD_BOOST
+#define NOWTECH_LOG_QUEUE_STD_BOOST
 
 #include <cstddef>
 #include <mutex>
@@ -18,7 +18,7 @@ public:
   static constexpr size_t csQueueSize = tQueueSize;
 
 private:
-  class FreeRtosQueue final {
+  class BlockingBoostQueue final {
     boost::lockfree::queue<tMessage, boost::lockfree::capacity<tQueueSize>> mQueue;
     bool                             mNotified = false;   // Guarded by mMutex.
     std::mutex                       mMutex;
@@ -26,9 +26,9 @@ private:
 
   public:
     /// First implementation, we assume we have plenty of memory.
-    FreeRtosQueue() noexcept = default;
+    BlockingBoostQueue() noexcept = default;
 
-    ~FreeRtosQueue() noexcept = default;
+    ~BlockingBoostQueue() noexcept = default;
 
     bool empty() const noexcept {
       return mQueue.empty();
@@ -63,7 +63,7 @@ private:
     }
   };
 
-  inline static FreeRtosQueue sQueue;
+  inline static BlockingBoostQueue sQueue;
 
   QueueStdBoost() = delete;
 

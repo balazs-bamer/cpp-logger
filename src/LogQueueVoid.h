@@ -1,5 +1,5 @@
-#ifndef LOG_QUEUE_VOID
-#define LOG_QUEUE_VOID
+#ifndef NOWTECH_LOG_QUEUE_VOID
+#define NOWTECH_LOG_QUEUE_VOID
 
 #include <cstddef>
 

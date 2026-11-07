@@ -18,7 +18,7 @@ public:
   static constexpr size_t csQueueSize = tQueueSize;
 
 private:
-  class FreeRtosQueue final {
+  class BlockingCircularQueue final {
     std::array<tMessage, tQueueSize> mQueue;
     size_t                           mNextWrite;
     size_t                           mNextRead;
@@ -29,13 +29,13 @@ private:
 
   public:
     /// First implementation, we assume we have plenty of memory.
-    FreeRtosQueue() noexcept
+    BlockingCircularQueue() noexcept
       : mNextWrite(0u)
       , mNextRead(0u)
       , mOccupied(0u) {
     }
 
-    ~FreeRtosQueue() noexcept = default;
+    ~BlockingCircularQueue() noexcept = default;
 
     bool empty() const noexcept {
       return mOccupied == 0u;
@@ -88,7 +88,7 @@ private:
     }
   };
 
-  inline static FreeRtosQueue sQueue;
+  inline static BlockingCircularQueue sQueue;
 
   QueueStdCircular() = delete;
 

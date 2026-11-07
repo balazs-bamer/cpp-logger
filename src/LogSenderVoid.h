@@ -1,5 +1,5 @@
-#ifndef LOG_SENDER_VOID
-#define LOG_SENDER_VOID
+#ifndef NOWTECH_LOG_SENDER_VOID
+#define NOWTECH_LOG_SENDER_VOID
 
 #include "Log.h"
 
