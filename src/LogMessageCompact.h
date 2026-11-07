@@ -5,6 +5,7 @@
 #include "LogMessageBase.h"
 #include <array>
 #include <cstring>
+#include <type_traits>
 
 namespace nowtech::log {
 
@@ -14,6 +15,10 @@ class MessageCompact final : public MessageBase<tPayloadSize, tSupportFloatingPo
 public:
   static constexpr size_t csPayloadSize = tPayloadSize + sizeof(uint8_t); // Antipattern to use the base field for storage, but we go for space saving.
   static constexpr bool   csSupportFloatingPoint = tSupportFloatingPoint;
+
+  /// Whether set() can store a value of this type. Only stored strings may use the base field too.
+  template<typename tArgument>
+  static constexpr bool csCanStore = sizeof(tArgument) <= tPayloadSize;
 
 private:
   enum class Type : uint8_t {
@@ -45,6 +50,7 @@ public:
 
   template<typename tArgument>
   void set(tArgument const aValue, LogFormat const aFormat, TaskId const aTaskId, MessageSequence const aMessageSequence) noexcept {
+    static_assert(csCanStore<tArgument> || std::is_same_v<tArgument, std::array<char, csPayloadSize>>, "The value doesn't fit the payload.");
     std::memcpy(mData + csOffsetPayload, &aValue, sizeof(aValue));
     Type type = getType(aValue);
     mData[csOffsetType] = static_cast<uint8_t>(type);
@@ -111,7 +117,7 @@ public:
       aConverter.convert(reinterpret_cast<char const*>(mData + csOffsetPayload), fill);
     }
     else {
-      if constexpr(csPayloadSize >= sizeof(int64_t) || sizeof(char*) > sizeof(int32_t)) {
+      if constexpr(csCanStore<int64_t>) {
         if(type == Type::cUint64_t) {
           uint64_t value;
           std::memcpy(&value, mData + csOffsetPayload, sizeof(value));
@@ -135,7 +141,7 @@ public:
         }
         else { // nothing to do
         }
-        if constexpr(csPayloadSize >= sizeof(double)) {
+        if constexpr(csCanStore<double>) {
           if(type == Type::cDouble) {
             double value;
             std::memcpy(&value, mData + csOffsetPayload, sizeof(value));
@@ -143,7 +149,7 @@ public:
           }
           else { // nothing to do
           }
-          if constexpr(csPayloadSize >= sizeof(long double)) {
+          if constexpr(csCanStore<long double>) {
             if(type == Type::cLongDouble) {
               long double value;
               std::memcpy(&value, mData + csOffsetPayload, sizeof(value));
@@ -188,7 +194,7 @@ public:
   }  
 
 private:
-  template<typename tArgument> static Type getType(tArgument const) noexcept { return Type::cInvalid; }
+  // No catch-all: a type without an overload here must not compile, instead of being dropped.
   static Type getType(bool const) noexcept { return Type::cBool; }
   static Type getType(float const) noexcept { return Type::cFloat; }
   static Type getType(double const) noexcept { return Type::cDouble; }

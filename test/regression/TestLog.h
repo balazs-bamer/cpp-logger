@@ -7,6 +7,7 @@
 //   LOG_TEST_MESSAGE_VARIANT  MessageVariant instead of MessageCompact
 //   LOG_TEST_MAX_TASKS        number of task IDs, default 2 (main and one more)
 //   LOG_TEST_SHUTDOWN         SenderVoid, which compiles all logging out
+//   LOG_TEST_NO_FLOAT         messages without floating point support
 // Everything logged ends up in gOutput.
 
 #include "TestCheck.h"
@@ -52,10 +53,15 @@ constexpr AtomicBufferType cgAtomicBufferInvalidValue = 1234546789;
 
 using LogAppInterface = nowtech::log::AppInterfaceStd<cgMaxTaskCount, false, 10u>;
 constexpr typename LogAppInterface::LogTime cgRefreshPeriod = 2u;   // The transmitter serves atomic buffer sends when idle.
-#ifdef LOG_TEST_MESSAGE_VARIANT
-using LogMessage = nowtech::log::MessageVariant<8u, true>;
+#ifdef LOG_TEST_NO_FLOAT
+constexpr bool cgSupportFloatingPoint = false;
 #else
-using LogMessage = nowtech::log::MessageCompact<8u, true>;
+constexpr bool cgSupportFloatingPoint = true;
+#endif
+#ifdef LOG_TEST_MESSAGE_VARIANT
+using LogMessage = nowtech::log::MessageVariant<8u, cgSupportFloatingPoint>;
+#else
+using LogMessage = nowtech::log::MessageCompact<8u, cgSupportFloatingPoint>;
 #endif
 using LogConverter = nowtech::log::ConverterCustomText<LogMessage, true, 100u, true, false>;
 #ifdef LOG_TEST_SHUTDOWN

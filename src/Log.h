@@ -201,6 +201,81 @@ private:
 
   Log() = delete;
 
+  template<typename tType>
+  struct TypeTag final {
+    using Type = tType;
+  };
+
+  template<size_t tSize, bool tSigned>
+  using FixedWidthInteger = std::conditional_t<tSize == 1u, std::conditional_t<tSigned, int8_t, uint8_t>,
+                            std::conditional_t<tSize == 2u, std::conditional_t<tSigned, int16_t, uint16_t>,
+                            std::conditional_t<tSize == 4u, std::conditional_t<tSigned, int32_t, uint32_t>,
+                                                            std::conditional_t<tSigned, int64_t, uint64_t>>>>;
+
+  template<typename tValue>
+  static constexpr bool isWideCharacter() noexcept {
+    bool result = std::is_same_v<tValue, wchar_t> || std::is_same_v<tValue, char16_t> || std::is_same_v<tValue, char32_t>;
+#ifdef __cpp_char8_t
+    result = result || std::is_same_v<tValue, char8_t>;
+#endif
+    return result;
+  }
+
+  /// Integers map to the fixed width type of their size and signedness, so the converter and the messages
+  /// see int32_t whether it is int or long, and enums map to their underlying type. bool, char and the
+  /// floating point types stay, everything else maps to void and can't be logged. Strings have their own
+  /// operator<< overloads.
+  template<typename tValue>
+  static constexpr auto loggedTypeTag() noexcept {
+    if constexpr(std::is_enum_v<tValue>) {
+      return loggedTypeTag<std::underlying_type_t<tValue>>();
+    }
+    else if constexpr(std::is_same_v<tValue, bool> || std::is_same_v<tValue, char>) {
+      return TypeTag<tValue>{};
+    }
+    else if constexpr(isWideCharacter<tValue>()) {   // The converter only knows char.
+      return TypeTag<void>{};
+    }
+    else if constexpr(std::is_integral_v<tValue> && sizeof(tValue) <= sizeof(int64_t)) {
+      return TypeTag<FixedWidthInteger<sizeof(tValue), std::is_signed_v<tValue>>>{};
+    }
+    else if constexpr(std::is_floating_point_v<tValue> && tMessage::csSupportFloatingPoint) {
+      return TypeTag<tValue>{};
+    }
+    else {
+      return TypeTag<void>{};
+    }
+  }
+
+  template<typename tValue>
+  using LoggedType = typename decltype(loggedTypeTag<std::remove_cv_t<tValue>>())::Type;
+
+  template<typename tValue>
+  static constexpr bool isLoggable() noexcept {
+    if constexpr(std::is_void_v<LoggedType<tValue>>) {
+      return false;
+    }
+    else if constexpr(csSendInBackground) {
+      return tMessage::template csCanStore<LoggedType<tValue>>;
+    }
+    else {
+      return true;
+    }
+  }
+
+  /// Compile time only. Rejects what can't be logged the same way in every mode, also when logging is
+  /// compiled out, so code that builds with one configuration builds with the others. Callers skip the
+  /// rest of their work when isLoggable() is false, so this is the only error reported.
+  template<typename tValue>
+  static constexpr void checkLoggable() noexcept {
+    static_assert(!std::is_floating_point_v<tValue> || tMessage::csSupportFloatingPoint,
+                  "Floating point logging is turned off, see the tSupportFloatingPoint parameter of the message.");
+    static_assert(std::is_floating_point_v<tValue> || !std::is_void_v<LoggedType<tValue>>,
+                  "This type can't be logged. Log bool, char, integers, enums, floating point numbers, char const * or std::string, and cast pointers to uintptr_t.");
+    static_assert(std::is_void_v<LoggedType<tValue>> || isLoggable<tValue>(),
+                  "This type doesn't fit the message payload, increase its size.");
+  }
+
   /// This will be used to send via queue. It stores the first message, and sends it only with the terminal marker.
   class LogShiftChainHelperBackgroundSend final {
   private:
@@ -232,13 +307,18 @@ private:
 
     template<typename tValue>
     LogShiftChainHelperBackgroundSend& operator<<(tValue const aValue) noexcept {
-      if(mTaskId != csInvalidTaskId && mNextSequence < std::numeric_limits<MessageSequence>::max()) {
-        LogFormat format = obtainFormat();
-        tMessage message;
-        message.set(aValue, format, mTaskId, mNextSequence);
-        sendOrStore(message);
+      checkLoggable<tValue>();
+      if constexpr(isLoggable<tValue>()) {
+        if(mTaskId != csInvalidTaskId && mNextSequence < std::numeric_limits<MessageSequence>::max()) {
+          LogFormat format = obtainFormat();
+          tMessage message;
+          message.set(static_cast<LoggedType<tValue>>(aValue), format, mTaskId, mNextSequence);
+          sendOrStore(message);
+        }
+        else { // silently discard value, nothing to do
+        }
       }
-      else { // silently discard value, nothing to do
+      else { // checkLoggable reported it
       }
       return *this;
     }
@@ -354,25 +434,13 @@ private:
 
     template<typename tValue>
     LogShiftChainHelperDirectSend& operator<<(tValue const aValue) {
-      if(mTaskId != csInvalidTaskId) {
-        LogFormat format;
-        if(mNextFormat.isValid()) {
-          format = mNextFormat;
-          mNextFormat.invalidate();
-        }
-        else {
-          format = sConfig->defaultFormat;
-        }
-        ConversionResult buffer[csDirectBufferSize];
-        tConverter converter(buffer, buffer + csDirectBufferSize);
-        converter.convert(aValue, format.mBase, format.mFill);
-        tAppInterface::lock();
-        tSender::send(buffer, converter.end());
-        tAppInterface::unlock();
+      checkLoggable<tValue>();
+      if constexpr(isLoggable<tValue>()) {
+        return convertAndSend(static_cast<LoggedType<tValue>>(aValue));
       }
-      else { // silently discard value, nothing to do
+      else {   // checkLoggable reported it
+        return *this;
       }
-      return *this;
     }
 
     LogShiftChainHelperDirectSend& operator<<(char * const aValue) {
@@ -380,7 +448,7 @@ private:
     }
 
     LogShiftChainHelperDirectSend& operator<<(char const * const aValue) {
-      return operator<< <char const *>((aValue != nullptr) ? aValue : csNullString);
+      return convertAndSend((aValue != nullptr) ? aValue : csNullString);
     }
 
     LogShiftChainHelperDirectSend& operator<<(std::string const &aValue) {   // Converted right away, no need to copy.
@@ -404,6 +472,30 @@ private:
       else { // nothing to do
       }
     }
+
+  private:
+    template<typename tValue>
+    LogShiftChainHelperDirectSend& convertAndSend(tValue const aValue) {
+      if(mTaskId != csInvalidTaskId) {
+        LogFormat format;
+        if(mNextFormat.isValid()) {
+          format = mNextFormat;
+          mNextFormat.invalidate();
+        }
+        else {
+          format = sConfig->defaultFormat;
+        }
+        ConversionResult buffer[csDirectBufferSize];
+        tConverter converter(buffer, buffer + csDirectBufferSize);
+        converter.convert(aValue, format.mBase, format.mFill);
+        tAppInterface::lock();
+        tSender::send(buffer, converter.end());
+        tAppInterface::unlock();
+      }
+      else { // silently discard value, nothing to do
+      }
+      return *this;
+    }
   }; // class LogShiftChainHelperDirectSend
 
   /// This shuts down all logging code generation without uncommenting anything from user code, when compiled with aT least -O1 
@@ -421,6 +513,19 @@ private:
 
     template<typename tValue>
     LogShiftChainHelperEmpty& operator<<(tValue const) noexcept {
+      checkLoggable<tValue>();
+      return *this;
+    }
+
+    LogShiftChainHelperEmpty& operator<<(char * const) noexcept {
+      return *this;
+    }
+
+    LogShiftChainHelperEmpty& operator<<(char const * const) noexcept {
+      return *this;
+    }
+
+    LogShiftChainHelperEmpty& operator<<(std::string const &) noexcept {
       return *this;
     }
 

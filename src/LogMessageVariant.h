@@ -35,12 +35,22 @@ private:
   static_assert(std::is_trivially_copyable_v<Payload>);
   // TODO concept on payload size and long double -- see it when 8 in main
 
+  template<typename tArgument, typename ...tAlternatives>
+  static constexpr bool isAlternative(std::variant<tAlternatives...> const *) noexcept {
+    return (std::is_same_v<tArgument, tAlternatives> || ...);
+  }
+
   Payload         mPayload;
   LogFormat       mFormat;
   TaskId          mTaskId;
   MessageSequence mMessageSequence;
 
 public:
+  /// Whether set() can store a value of this type: it must be one of the payload alternatives exactly,
+  /// a converting assignment could pick another one or narrow.
+  template<typename tArgument>
+  static constexpr bool csCanStore = isAlternative<tArgument>(static_cast<Payload const *>(nullptr));
+
   MessageVariant() = default;
   MessageVariant(MessageVariant const &) = default;
   MessageVariant(MessageVariant &&) = default;
@@ -54,6 +64,7 @@ public:
 
   template<typename tArgument>
   void set(tArgument const aValue, LogFormat const aFormat, TaskId const aTaskId, MessageSequence const aMessageSequence) noexcept {
+    static_assert(csCanStore<tArgument>, "The value has no payload alternative.");
     mPayload = aValue;
     mFormat = aFormat;
     mTaskId = aTaskId;
