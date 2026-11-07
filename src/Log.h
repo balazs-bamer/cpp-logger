@@ -353,6 +353,7 @@ private:
     LogShiftChainHelperBackgroundSend(TaskId const aTaskId) noexcept
      : mTaskId(aTaskId)
      , mNextSequence(0u)
+     , mFirstMessage{}
      , mWasMessage(false) {
       mNextFormat.invalidate();
       openGroup(mTaskId);
@@ -387,7 +388,7 @@ private:
       if constexpr(isLoggable<tValue>()) {
         if(mTaskId != csInvalidTaskId && mNextSequence < std::numeric_limits<MessageSequence>::max()) {
           LogFormat format = obtainFormat();
-          tMessage message;
+          tMessage message{};
           message.set(static_cast<LoggedType<tValue>>(aValue), format, mTaskId, mNextSequence);
           sendOrStore(message);
         }
@@ -453,9 +454,9 @@ private:
       if(mTaskId != csInvalidTaskId && mNextSequence < std::numeric_limits<MessageSequence>::max()) {
         aValue = (aValue != nullptr) ? aValue : csNullString;
         LogFormat format = obtainFormat();
-        tMessage message;
+        tMessage message{};
         if(format.isStoredString()) {
-          std::array<char, csPayloadSizeBr> payload;
+          std::array<char, csPayloadSizeBr> payload{};   // Copied whole, also past the terminating zero.
           char const * where = aValue;
           while(*where != csTerminalChar) {
             size_t copied = 0u;
@@ -831,7 +832,7 @@ public:
         else { // nothing to do
         }
         if constexpr(csSendInBackground) {
-          tMessage message;
+          tMessage message{};
           message.setShutdown(taskId);
           tQueue::push(message);
           while(!(*sTaskShutdowns)[taskId]) {
@@ -1048,7 +1049,7 @@ private:
 
   static void transmitterTaskFunction() noexcept {
     while(sKeepAliveTask || !tQueue::empty()) {
-      tMessage message;
+      tMessage message{};
       if(tQueue::pop(message, csRefreshPeriod)) {
         TaskId taskId = message.getTaskId();
         if (message.isShutdown()) {

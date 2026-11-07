@@ -1,5 +1,10 @@
 tmp/*
-cmake-build-debug/*
+cmake-build-*/
+build*/
+
+# IDE settings stay local.
+.idea/
+.vscode/
 test-stdthreadostream
 *~
 

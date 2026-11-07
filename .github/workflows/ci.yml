@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.compiler }} ${{ matrix.build-type }} ${{ matrix.sanitizer }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+        build-type: [Debug, MinSizeRel]
+        sanitizer: ['']
+        include:   # The sanitizers cover the queued modes' threading too.
+          - {compiler: gcc, build-type: Debug, sanitizer: thread}
+          - {compiler: clang, build-type: Debug, sanitizer: thread}
+          - {compiler: gcc, build-type: Debug, sanitizer: 'address,undefined'}
+          - {compiler: clang, build-type: Debug, sanitizer: 'address,undefined'}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libboost-dev clang
+
+      - name: Let ThreadSanitizer map its shadow memory
+        if: matrix.sanitizer == 'thread'
+        run: sudo sysctl vm.mmap_rnd_bits=28   # The runner's default address randomization is too wide for it.
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=${{ matrix.build-type }}
+          -DCMAKE_CXX_COMPILER=${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }}
+          -DCPP_LOGGER_SANITIZER=${{ matrix.sanitizer }}
+
+      - name: Build
+        run: cmake --build build -j 4
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -j 4

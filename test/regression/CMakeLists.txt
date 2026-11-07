@@ -16,7 +16,7 @@ endif()
 function(add_regression_test aName aSource)
   add_executable(${aName} ${aSource})
   target_compile_definitions(${aName} PRIVATE ${ARGN})
-  target_link_libraries(${aName} PRIVATE Threads::Threads)
+  target_link_libraries(${aName} PRIVATE cpp_logger cpp_logger_warnings Threads::Threads Boost::headers)
   add_test(NAME ${aName} COMMAND ${aName})
   set_tests_properties(${aName} PROPERTIES
     TIMEOUT 60   # A hang is the failure mode of several of these bugs.
@@ -54,6 +54,9 @@ add_regression_test(float-logging-variant float-logging.cpp LOG_TEST_MESSAGE_VAR
 add_regression_test(float-logging-direct float-logging.cpp LOG_TEST_DIRECT)
 add_regression_test(group-check-background group-check.cpp)
 add_regression_test(group-check-direct group-check.cpp LOG_TEST_DIRECT)
+# These two test the default without NDEBUG, which Release and MinSizeRel builds define.
+target_compile_options(group-check-background PRIVATE -UNDEBUG)
+target_compile_options(group-check-direct PRIVATE -UNDEBUG)
 add_regression_test(group-check-shutdown group-check.cpp LOG_TEST_SHUTDOWN LOG_TEST_CHECK_OFF)
 add_regression_test(group-check-ndebug group-check.cpp NDEBUG LOG_TEST_CHECK_OFF)
 add_regression_test(group-check-forced group-check.cpp NDEBUG NOWTECH_LOG_CHECK_GROUPS=1)
@@ -68,7 +71,7 @@ add_regression_test(sender-errors-direct-exceptions sender-errors.cpp LOG_TEST_D
 function(add_compile_fail_test aName aSource aExpectedMessage)
   add_executable(${aName} EXCLUDE_FROM_ALL ${aSource})
   target_compile_definitions(${aName} PRIVATE ${ARGN})
-  target_link_libraries(${aName} PRIVATE Threads::Threads)
+  target_link_libraries(${aName} PRIVATE cpp_logger cpp_logger_warnings Threads::Threads Boost::headers)
   add_test(NAME ${aName} COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --target ${aName})
   set_tests_properties(${aName} PROPERTIES
     PASS_REGULAR_EXPRESSION "${aExpectedMessage}"
@@ -94,7 +97,9 @@ target_include_directories(freertos-registration PRIVATE freertos-stub)
 
 add_library(freertos-log-direct OBJECT freertos-log.cpp)   # Compile only.
 target_include_directories(freertos-log-direct PRIVATE freertos-stub)
+target_link_libraries(freertos-log-direct PRIVATE cpp_logger cpp_logger_warnings)
 add_library(freertos-log-background OBJECT freertos-log.cpp)
+target_link_libraries(freertos-log-background PRIVATE cpp_logger cpp_logger_warnings)
 target_compile_definitions(freertos-log-background PRIVATE LOG_TEST_BACKGROUND)
 target_include_directories(freertos-log-background PRIVATE freertos-stub)
 
@@ -104,6 +109,7 @@ check_cxx_compiler_flag(-mlong-double-64 CPP_LOGGER_HAVE_LONG_DOUBLE_64)
 if(CPP_LOGGER_LONG_DOUBLE_SIZE EQUAL 8 OR CPP_LOGGER_HAVE_LONG_DOUBLE_64)
   add_library(freertos-demo OBJECT ../test-freertosminimal.cpp)   # Compile only.
   target_include_directories(freertos-demo PRIVATE freertos-stub)
+  target_link_libraries(freertos-demo PRIVATE cpp_logger cpp_logger_warnings)
   if(NOT CPP_LOGGER_LONG_DOUBLE_SIZE EQUAL 8)
     target_compile_options(freertos-demo PRIVATE -mlong-double-64)
   endif()

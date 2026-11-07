@@ -166,6 +166,24 @@ public:
 };
 ```
 
+## Building and testing
+
+The library is header-only. From CMake, add this repository with `add_subdirectory` and link `cpp-logger::cpp-logger`, which provides the include directories and C++17. The STL _App interface_ also needs `Threads::Threads`, and `QueueStdBoost` needs the Boost headers. Clone with `--recursive`, or run `git submodule update --init`, to get the `cpp-memory-manager` submodule.
+
+Built on its own, the project also builds the demos in `test/`, the benchmarks in `benchmark/` and the regression tests in `test/regression`. These need the Boost headers. The benchmarks download [picobench](https://github.com/iboB/picobench) 2.01, unless `CPP_LOGGER_PICOBENCH_DIR` points to a copy.
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+ctest --test-dir build
+```
+
+- `CPP_LOGGER_BUILD_EXAMPLES`, `CPP_LOGGER_BUILD_TESTS` and `CPP_LOGGER_BUILD_BENCHMARKS` turn the parts on or off. They are on by default when this is the top-level project.
+- `CPP_LOGGER_SANITIZER` builds the regression tests with sanitizers, for example `thread` or `address,undefined`. Some of the bugs they cover only show up under one.
+- No build type is forced. The space requirements below were measured with `-Os`, which is `-DCMAKE_BUILD_TYPE=MinSizeRel`.
+
+`.github/workflows/ci.yml` runs the regression tests with GCC and Clang, also under ThreadSanitizer, and under AddressSanitizer with UndefinedBehaviorSanitizer.
+
 ## Benchmarks
 
 I used [picobench](https://github.com/iboB/picobench) for benchmarks using the supplied benchmark apps. Here are some averaged results measured over 8192 iterations on my Intel(R) Xeon(R) CPU E31220L @ 2.20GHz. Compiled using `clang++ -O2`. There were no significant differences for `MessageVariant` or `MessageCompact`, or whether the task ID was provided or not. Log activity was
@@ -461,3 +479,26 @@ Log::sendAtomicBuffer();
 ```
 
 which is a blocking call. Concurrent calls are serialized, each caller waits for its own complete send. Note that in multithreaded mode, sending from all other tasks will not occur; only the queues will hold messages from concurrent logging as long as possible.
+
+## Retrospective (2026)
+
+I wrote this library in 2020 and 2021. In 2026 I reviewed it again, fixed what turned out to be wrong, and noted what I would design differently today.
+
+### Fixed in the review
+
+- Concurrency. The STL queues unlocked their wait mutex on another thread than the one that locked it, and the circular queue could pop from an empty queue after a stale wake-up, which hung the program. The atomic buffer send lost requests and blocked concurrent callers forever. Direct mode didn't lock its output, so the lines of different tasks mixed. Sender errors were thrown from `noexcept` code.
+- Robustness. Registering a task without a name crashed, and registering or unregistering twice corrupted the task table. Logging a null string crashed. Values of types without an exact overload, like `long long` or enums, were silently dropped in queued mode, and values larger than the message payload were copied past its end. Such types are now mapped to fixed-width ones or rejected at compile time.
+- API. A group now also ends when its chain helper is destroyed, so `Log::end` is optional. A debug check reports a task opening a second group while one is still open.
+- Floating point. The converter used `log10` and `pow`, which need most of a floating point library on an MCU, and it didn't carry a rounded-up last digit. It now uses integer arithmetic only and rounds correctly.
+- Hygiene. Two headers shared an include guard, and the CMake build hardwired `-Os` and built only some of the programs. There is now a CMake library target and a suite of about 50 regression tests, run under sanitizers in CI.
+
+### Known issues
+
+- Queued mode sends every item as a queue message of its own, and the transmitter regroups them per task. That costs a queue push per item, a group of more than 255 items is truncated, a full pool allocator drops a whole group and possibly the next one, and two groups open in one task at the same time corrupt each other. The fix I would do next is grouping on the producer side: the chain helper collects its group and pushes it as one record.
+- In queued mode `char const *` strings are stored as pointers, so a string that may not outlive its conversion must be logged with `LC::St`, or as a `std::string`, which is copied.
+- The configuration is a long list of positional template parameters, and the same _App interface_ is passed to several policies. A configuration struct, and C++20 concepts for the policies, would make it clearer and give better error messages.
+- The `TaskId` and `LogTopic` overloads differ only in signedness, and a plain `int` argument silently selects the `LogTopic` one, so `Log::n(1)` logs nothing unless topic 1 is registered.
+- `AtomicBufferOperational` uses a sequentially consistent `fetch_add` where a relaxed one would do, and its plain buffer stores are formally a data race with the readout.
+- The FreeRTOS _App interface_ doesn't lock direct mode output, and its `error()` is a debug trap. The FreeRTOS parts were only compiled against stub headers in the review, not run on hardware.
+- `std::string_view` isn't supported, and `long double` is formatted with `double` precision.
+- The space requirements and benchmark results above are from 2021, before these changes.
