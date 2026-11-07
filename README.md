@@ -93,7 +93,7 @@ For the queue mode, it contains a secondary list or queue for each task, which g
 
 A simple converter emitting character strings, with an emphasis on space-efficient operation on embedded platforms. Features:
 - Arbitrary numeric base from 2 to 16 for integer conversion.
-- Floating-point conversion always happens in scientific mode with NAN and INF distinction (bug: no signs displayed for them).
+- Floating-point conversion always happens in scientific mode, correctly rounded to the requested number of significant digits, at most 17. It uses integer arithmetic only, so it needs no floating-point library functions. NaN, infinity and zero keep their sign.
 - Adjustable
   - zero fill
   - numeric base prefix display for binary and hexadecimal
@@ -234,7 +234,7 @@ No floating-point arithmetic is used in the application, and support is turned o
 
 ### Supported types
 
-As all major coding standards suggest, the use of integer types with indeterminate size is discouraged; therefore, this library does not support `long` or `unsigned`.
+As all major coding standards suggest, the use of integer types with indeterminate size is discouraged. Still, `int`, `long` and the other integer types are accepted and logged as the fixed-width type of their size and signedness, and enums as their underlying type.
 
 `LogFormat` is a struct holding the numeric base and the fill value. It is easiest to reach in `LogConfig`.
 
@@ -243,7 +243,7 @@ As all major coding standards suggest, the use of integer types with indetermina
 |`bool`         |no                         |Appears as _true_ or _false_ in the current `LogConverterCustomText` implementation.|
 |`float`        |mantissa precision         |Enabled only if floating point support is on.|
 |`double`       |mantissa precision         |Enabled only if floating point support is on and the payload is chosen to be big enough.|
-|`long double`  |mantissa precision         |Enabled only if floating point support is on and the payload is chosen to be big enough.|
+|`long double`  |mantissa precision         |Enabled only if floating point support is on and the payload is chosen to be big enough. Converted with `double` precision and range.|
 |`uint8_t`      |base and fill              ||
 |`uint16_t`     |base and fill              ||
 |`uint32_t`     |base and fill              ||
